@@ -15,6 +15,7 @@ data at all (watch not worn) are left out.
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from garmin_mcp import db
 from garmin_mcp.cli import login, parse_args, report_empty_columns, write_csv
 
 # CSV column -> key in the daily summary (get_user_summary).
@@ -159,12 +160,16 @@ def main() -> None:
 
     rows = build_rows(summaries, sleep)
     write_csv(args.out, COLUMNS, rows)
+    with db.connect() as con:
+        db.merge(con, "daily", rows)
+        total = con.execute("SELECT count(*) FROM daily").fetchone()[0]
 
     # Summary only: coverage counts, never personal values.
     def count(col: str) -> int:
         return sum(r[col] is not None for r in rows)
 
     print(f"Wrote {len(rows)} of {days} days to {args.out}")
+    print(f"Merged into {db.db_path()} (daily table now has {total} rows)")
     print(
         f"  with steps: {count('steps')}  resting HR: {count('resting_hr_bpm')}"
         f"  sleep: {count('sleep_total_s')}  HRV: {count('hrv_overnight_avg_ms')}"

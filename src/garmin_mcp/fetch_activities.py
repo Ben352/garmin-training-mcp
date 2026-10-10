@@ -15,6 +15,7 @@ coordinates. It is written under data/, which is gitignored.
 from collections import Counter
 from typing import Any
 
+from garmin_mcp import db
 from garmin_mcp.cli import login, parse_args, report_empty_columns, write_csv
 
 RUN_TYPES = {
@@ -75,6 +76,26 @@ def to_row(activity: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def to_db_row(row: dict[str, Any]) -> dict[str, Any]:
+    """CSV row -> `activities` table row (cleaning rules from docs/schema.md)."""
+    out = dict(row)
+    out["start_time_utc"] = out.pop("start_time_gmt")
+    out["activity_date"] = row["start_time_local"][:10]  # local date, not UTC
+    if row["activity_type"] not in RUN_TYPES and not row["distance_m"]:
+        out["distance_m"] = None  # strength sessions report 0.0
+    for col, digits in [
+        ("duration_s", 1),
+        ("moving_duration_s", 1),
+        ("aerobic_training_effect", 1),
+        ("anaerobic_training_effect", 1),
+        ("training_load", 1),
+        ("avg_cadence_spm", 1),
+    ]:
+        if out[col] is not None:
+            out[col] = round(out[col], digits)
+    return out
+
+
 def main() -> None:
     args = parse_args(__doc__.splitlines()[0], "data/activities.csv")
     client = login()
@@ -90,9 +111,13 @@ def main() -> None:
         if a.get("activityType", {}).get("typeKey") in WANTED_TYPES
     ]
     write_csv(args.out, COLUMNS, rows)
+    with db.connect() as con:
+        db.merge(con, "activities", [to_db_row(r) for r in rows])
+        total = con.execute("SELECT count(*) FROM activities").fetchone()[0]
 
     # Summary only: counts and field coverage, never personal values.
     print(f"Fetched {len(activities)} activities; wrote {len(rows)} to {args.out}")
+    print(f"Merged into {db.db_path()} (activities table now has {total} rows)")
     for type_key, n in sorted(types.items(), key=lambda kv: -kv[1]):
         print(f"  {'✓' if type_key in WANTED_TYPES else '·'} {type_key}: {n}")
     report_empty_columns(COLUMNS, rows)

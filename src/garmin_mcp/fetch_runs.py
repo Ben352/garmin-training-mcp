@@ -3,7 +3,7 @@
 Usage:
     uv run garmin-fetch           # first: refresh data/activities.csv
     uv run garmin-fetch-runs      # fetch details for runs not yet loaded
-    uv run garmin-fetch-runs --offline   # rebuild CSVs from the raw cache, no API calls
+    uv run garmin-fetch-runs --offline   # rebuild CSVs + DB from the raw cache, no API calls
 
 Each run is fetched once. Its raw API responses are cached in
 data/raw/runs/<activity_id>.json.gz and the run is recorded in
@@ -29,6 +29,7 @@ from garminconnect import (
     GarminConnectTooManyRequestsError,
 )
 
+from garmin_mcp import db
 from garmin_mcp.cli import login, report_empty_columns, write_csv
 from garmin_mcp.fetch_activities import RUN_TYPES
 
@@ -51,6 +52,11 @@ def pace(speed_mps: float | None) -> float | None:
 
 def rnd(value: float | None, digits: int = 1) -> float | None:
     return None if value is None else round(value, digits)
+
+
+def ts(value: str | None) -> str | None:
+    """Garmin '2026-10-01T07:00:00.0' -> '2026-10-01 07:00:00'; None if missing."""
+    return value.replace("T", " ")[:19] if value else None
 
 
 # ---------------------------------------------------------------- fetch & cache
@@ -189,7 +195,7 @@ def parse_run(raw: dict[str, Any]) -> dict[str, Any]:
     distance, duration = s.get("distance"), s.get("duration")
     return {
         "activity_id": raw["activity_id"],
-        "start_time_local": (s.get("startTimeLocal") or "").replace("T", " ")[:19],
+        "start_time_local": ts(s.get("startTimeLocal")),
         "distance_m": rnd(distance),
         "duration_s": rnd(duration),
         "moving_duration_s": rnd(s.get("movingDuration")),
@@ -272,9 +278,7 @@ def parse_laps(raw: dict[str, Any]) -> list[dict[str, Any]]:
                 "activity_id": raw["activity_id"],
                 "lap_index": lap.get("lapIndex"),
                 "intensity_type": lap.get("intensityType"),
-                "start_time_gmt": (lap.get("startTimeGMT") or "").replace("T", " ")[
-                    :19
-                ],
+                "start_time_gmt": ts(lap.get("startTimeGMT")),
                 "distance_m": rnd(distance),
                 "duration_s": rnd(duration),
                 "moving_duration_s": rnd(lap.get("movingDuration")),
@@ -471,17 +475,35 @@ def fetch_vo2max(client, start: date, end: date) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------- main
 
 
-def rebuild_csvs(loaded: list[int]) -> tuple[int, int, int]:
+def log_rows(loaded: dict[int, dict[str, str]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "activity_id": aid,
+            "fetched_at_utc": r["fetched_at_utc"],
+            "n_samples": int(r["n_samples"]),
+            "has_weather": r["has_weather"] == "True",
+        }
+        for aid, r in sorted(loaded.items())
+    ]
+
+
+def rebuild(loaded: dict[int, dict[str, str]]) -> tuple[int, int, int]:
+    """Rebuild the run CSVs and DB tables from the raw cache of all loaded runs."""
     runs, laps, splits = [], [], []
     for aid in sorted(loaded):
         raw = load_raw(aid)
         runs.append(parse_run(raw))
         laps.extend(parse_laps(raw))
         splits.extend(km_splits(aid, time_series(raw["details"])))
-    runs.sort(key=lambda r: r["start_time_local"])
+    runs.sort(key=lambda r: r["start_time_local"] or "")
     write_csv(DATA / "runs.csv", RUN_COLUMNS, runs)
     write_csv(DATA / "run_laps.csv", LAP_COLUMNS, laps)
     write_csv(DATA / "run_km_splits.csv", SPLIT_COLUMNS, splits)
+    with db.connect() as con:
+        db.replace(con, "runs", runs)
+        db.replace(con, "run_laps", laps)
+        db.replace(con, "run_km_splits", splits)
+        db.replace(con, "run_fetch_log", log_rows(loaded))
     report_empty_columns(RUN_COLUMNS, runs)
     return len(runs), len(laps), len(splits)
 
@@ -490,7 +512,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--activities", type=Path, default=DATA / "activities.csv")
     parser.add_argument(
-        "--offline", action="store_true", help="rebuild CSVs from the raw cache only"
+        "--offline",
+        action="store_true",
+        help="rebuild CSVs and DB tables from the raw cache only",
     )
     args = parser.parse_args()
 
@@ -535,10 +559,15 @@ def main() -> None:
         if run_dates:
             vo2 = fetch_vo2max(client, min(run_dates.values()), max(run_dates.values()))
             write_csv(DATA / "vo2max.csv", VO2_COLUMNS, vo2)
+            with db.connect() as con:
+                db.merge(con, "vo2max", vo2)
             print(f"VO2 max: {len(vo2)} dated values → {DATA / 'vo2max.csv'}")
 
-    n_runs, n_laps, n_splits = rebuild_csvs(list(loaded))
-    print(f"Rebuilt from cache: {n_runs} runs, {n_laps} laps, {n_splits} km splits")
+    n_runs, n_laps, n_splits = rebuild(loaded)
+    print(
+        f"Rebuilt from cache: {n_runs} runs, {n_laps} laps, {n_splits} km splits"
+        f" → CSVs + {db.db_path()}"
+    )
 
 
 if __name__ == "__main__":

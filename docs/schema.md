@@ -10,6 +10,23 @@ Last profiled: 2026-10-10, over a 90-day window (2026-07-12 → 2026-10-10):
 - `data/runs.csv` / `run_laps.csv` / `run_km_splits.csv`: 18 runs, 177 laps, 159 km splits
 - `data/vo2max.csv`: 15 dated values
 
+## Database overview
+
+`data/garmin.duckdb` (`GARMIN_DB_PATH`). DDL in `src/garmin_mcp/schema.sql` (the single
+source of truth for types). Write helpers in `src/garmin_mcp/db.py`:
+
+- **`merge`** (`INSERT OR REPLACE` on the primary key) for `activities`, `daily` and
+  `vo2max`. Re-fetching overlapping ranges updates rows and never duplicates them. Rows
+  outside the batch are kept.
+- **`replace`** (delete-all + insert in one transaction) for `runs`, `run_laps`,
+  `run_km_splits` and `run_fetch_log`, which are rebuilt from the raw run cache.
+
+Relationships: `runs`, `run_laps`, `run_km_splits` and `run_fetch_log` → `activities`
+on `activity_id`. `daily` and `vo2max` are keyed by date (join activities on
+`activity_date`, and use `ASOF JOIN` for VO2 max).
+
+Writers keep connections short, because DuckDB allows one read-write process at a time.
+
 ---
 
 ## `activities.csv`
@@ -72,40 +89,21 @@ Run types accepted by the fetch filter (`RUN_TYPES`): `running`, `trail_running`
 
 ---
 
-## Proposed DuckDB table: `activities`
+## DuckDB table: `activities`
 
-The normalized target for the next milestone, derived from the profile above.
+DDL: `src/garmin_mcp/schema.sql`. Key `activity_id`. **Merged** on every
+`garmin-fetch`, so history builds up beyond the CSV's date range.
 
-```sql
-CREATE TABLE activities (
-    activity_id               BIGINT PRIMARY KEY,
-    activity_type             VARCHAR NOT NULL,
-    activity_name             VARCHAR,
-    location_name             VARCHAR,
-    start_lat                 DOUBLE,
-    start_lon                 DOUBLE,
-    end_lat                   DOUBLE,
-    end_lon                   DOUBLE,
-    activity_date             DATE NOT NULL,        -- CAST(start_time_local AS DATE)
-    start_time_local          TIMESTAMP NOT NULL,
-    start_time_utc            TIMESTAMP NOT NULL,
-    duration_s                DOUBLE NOT NULL,      -- rounded to 0.1
-    moving_duration_s         DOUBLE,
-    distance_m                DOUBLE,               -- NULL when 0 for non-distance types
-    avg_pace_s_per_km         DOUBLE,               -- runs only
-    avg_hr_bpm                SMALLINT,
-    max_hr_bpm                SMALLINT,
-    elevation_gain_m          DOUBLE,
-    calories_kcal             INTEGER,
-    avg_cadence_spm           DOUBLE,
-    aerobic_training_effect   DOUBLE,               -- rounded to 0.1
-    anaerobic_training_effect DOUBLE,               -- rounded to 0.1
-    training_load             DOUBLE,               -- rounded to 0.1
-    total_sets                SMALLINT,             -- strength only
-    active_sets               SMALLINT,
-    total_reps                SMALLINT
-);
-```
+The columns are the same as `activities.csv`, with these cleaning rules applied
+(`fetch_activities.to_db_row`):
+
+| Change | Why |
+|---|---|
+| `start_time_gmt` → `start_time_utc` | Clearer name. |
+| New `activity_date DATE` = local date of `start_time_local` | Activities span several timezones, so never derive dates from UTC. |
+| `distance_m` = NULL when 0 for non-run types | Strength sessions report `0.0`, which would distort averages. |
+| Durations, training effect, load and cadence rounded to 1 decimal | Removes Garmin's spurious float precision. |
+| HR → `SMALLINT`, calories → `INTEGER` | They are whole numbers stored as floats. |
 
 ---
 
@@ -202,51 +200,10 @@ Sources:
 
 ---
 
-## Proposed DuckDB table: `daily`
+## DuckDB table: `daily`
 
-```sql
-CREATE TABLE daily (
-    date                        DATE PRIMARY KEY,
-    wear_s                      INTEGER,
-    steps                       INTEGER,
-    step_goal                   INTEGER,
-    distance_m                  INTEGER,
-    active_kcal                 DOUBLE,
-    total_kcal                  DOUBLE,
-    resting_hr_bpm              SMALLINT,
-    resting_hr_7d_avg_bpm       SMALLINT,
-    min_hr_bpm                  SMALLINT,
-    max_hr_bpm                  SMALLINT,
-    avg_stress                  SMALLINT,
-    max_stress                  SMALLINT,
-    body_battery_high           SMALLINT,
-    body_battery_low            SMALLINT,
-    body_battery_charged        SMALLINT,
-    body_battery_drained        SMALLINT,
-    moderate_intensity_min      SMALLINT,
-    vigorous_intensity_min      SMALLINT,
-    floors_ascended             DOUBLE,
-    highly_active_s             INTEGER,
-    active_s                    INTEGER,
-    sedentary_s                 INTEGER,
-    avg_waking_respiration_brpm DOUBLE,
-    sleep_start_local           TIMESTAMP,
-    sleep_end_local             TIMESTAMP,
-    sleep_total_s               INTEGER,
-    sleep_deep_s                INTEGER,
-    sleep_light_s               INTEGER,
-    sleep_rem_s                 INTEGER,
-    sleep_awake_s               INTEGER,
-    sleep_score                 SMALLINT,
-    sleep_quality               VARCHAR,
-    sleep_avg_hr_bpm            DOUBLE,
-    sleep_avg_respiration_brpm  DOUBLE,
-    sleep_body_battery_change   SMALLINT,
-    hrv_overnight_avg_ms        DOUBLE,
-    hrv_7d_avg_ms               DOUBLE,
-    hrv_status                  VARCHAR
-);
-```
+DDL: `src/garmin_mcp/schema.sql`. Key `date`. **Merged** on every
+`garmin-fetch-daily`. The columns and cleaning rules are identical to `daily.csv` above.
 
 This is one wide table instead of the four tables in the original plan
 (`daily_sleep`/`daily_hrv`/`daily_rhr`). All the data shares the same date key, and a

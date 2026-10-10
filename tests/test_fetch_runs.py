@@ -207,3 +207,22 @@ def test_elevation_climb_counted_once():
     steps = fetch_runs.elevation_steps(climb)
     assert sum(g for g, _ in steps) == pytest.approx(3.0)
     assert sum(lo for _, lo in steps) == 0
+
+
+def test_run_tables_land_in_db_and_are_replaced_not_appended(workspace):
+    from garmin_mcp import db
+
+    fetch_runs.main()
+    fetch_runs.main()
+    with db.connect(read_only=True) as con:
+        counts = {
+            t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+            for t in ("runs", "run_laps", "run_km_splits", "run_fetch_log", "vo2max")
+        }
+    assert counts == {
+        "runs": 2,
+        "run_laps": 2,
+        "run_km_splits": 4,
+        "run_fetch_log": 2,
+        "vo2max": 1,
+    }
