@@ -1,0 +1,25 @@
+[project]
+name = "garmin-mcp"
+version = "0.1.0"
+description = "Personal Garmin data pipeline and MCP server"
+authors = [
+    { name = "Ben Sauber", email = "bensauber904@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "garminconnect>=0.3.17",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+garmin-fetch = "garmin_mcp.fetch_activities:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]

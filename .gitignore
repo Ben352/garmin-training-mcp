@@ -1,0 +1,10 @@
+# secrets & personal data — never commit
+.env
+data/
+*.fit
+*.duckdb
+
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
