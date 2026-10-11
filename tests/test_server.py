@@ -53,6 +53,7 @@ def test_tools_are_listed_with_docstrings_and_read_only_hint():
 
     tools = {t.name: t for t in anyio.run(go)}
     assert set(tools) == {
+        "data_status",
         "list_activities",
         "get_run",
         "daily_metrics",
@@ -496,3 +497,35 @@ def test_schema_resource_survives_database_without_newer_tables(seeded):
     text = anyio.run(go)
     assert "## sync_log (not created yet" in text
     assert "## activities (4 rows)" in text
+
+
+def test_data_status_reports_coverage_and_last_sync(seeded, seeded_daily, monkeypatch):
+    with db.connect() as con:
+        db.log_sync(con, "garmin-fetch", None, None, 4)
+        db.log_sync(con, "garmin-fetch-daily", None, None, 4)
+    data = call("data_status", {}).structured_content
+    assert data["activities"]["latest_date"] == "2026-10-05"
+    assert data["activities"]["rows"] == 4
+    assert data["activities"]["days_since_sync"] == 0
+    assert data["daily"]["latest_date"] == "2026-09-04"
+    assert data["daily"]["latest_sleep_date"] == "2026-09-01"
+    # 3 running activities are listed but none has details in `runs` yet.
+    assert data["runs"]["pending_details"] == 3 and data["runs"]["rows"] == 0
+    assert data["runs"]["last_synced_utc"] is None  # garmin-fetch-runs never ran
+    assert data["vo2max"]["latest_date"] is None
+    assert data["synthetic"] is False
+    assert "note" not in data
+
+
+def test_data_status_on_database_without_sync_log(seeded):
+    with duckdb.connect(str(db.db_path())) as con:
+        con.execute("DROP TABLE sync_log")
+    data = call("data_status", {}).structured_content
+    assert data["activities"]["last_synced_utc"] is None
+    assert data["synthetic"] is None
+    assert "No sync recorded yet" in data["note"]
+
+
+def test_data_status_without_database():
+    result = call("data_status", {})
+    assert result.is_error and "garmin-fetch" in result.content[0].text
