@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import getpass
 import os
 import sys
 from datetime import date, timedelta
@@ -21,8 +22,22 @@ from garmin_mcp import config
 DEFAULT_TOKENSTORE = "~/.garminconnect"
 
 
+def _login_with_token(tokenstore: str) -> Garmin | None:
+    """Resume the cached session. None if there's no token or Garmin rejects it."""
+    client = Garmin()  # no credentials: can only succeed from the token
+    try:
+        client.login(tokenstore)
+    except GarminConnectAuthenticationError:
+        return None
+    return client
+
+
 def login() -> Garmin:
-    """Log in once using cached tokens or env credentials. Exits on failure, never retries.
+    """Log in with the cached session token, asking for the password only if needed.
+
+    The password is never read from a file or env var: it's typed at the prompt
+    (not echoed), used once, and only the resulting session token is saved. One
+    password attempt, never retried. Exits with a message on failure.
 
     With GARMIN_SYNTHETIC=1 returns the synthetic client instead: no account needed.
     """
@@ -32,24 +47,38 @@ def login() -> Garmin:
         print("Synthetic mode: generated data, no Garmin account used.")
         return SyntheticGarmin()
     load_dotenv(Path.cwd() / ".env")
+    if os.getenv("GARMIN_PASSWORD"):
+        print(
+            "Note: GARMIN_PASSWORD is ignored; you'll be asked for the password when "
+            "needed. Remove it from .env.",
+            file=sys.stderr,
+        )
     tokenstore = os.getenv("GARMINTOKENS", DEFAULT_TOKENSTORE)
     Path(tokenstore).expanduser().mkdir(mode=0o700, parents=True, exist_ok=True)
 
-    client = Garmin(
-        email=os.getenv("GARMIN_EMAIL"),
-        password=os.getenv("GARMIN_PASSWORD"),
-        prompt_mfa=lambda: input("Garmin MFA code: ").strip(),
-    )
     try:
-        client.login(tokenstore)
+        if client := _login_with_token(tokenstore):
+            return client
+        if not sys.stdin.isatty():
+            sys.exit(
+                "No valid Garmin session token, and no terminal to ask for the "
+                "password. Run `uv run garmin-fetch` in a terminal once to log in."
+            )
+        print("No valid Garmin session token: log in once to create one.")
+        email = os.getenv("GARMIN_EMAIL") or input("Garmin email: ").strip()
+        client = Garmin(
+            email=email,
+            password=getpass.getpass("Garmin password: "),
+            prompt_mfa=lambda: input("Garmin MFA code: ").strip(),
+        )
+        client.login(tokenstore)  # saves a fresh token on success
     except GarminConnectTooManyRequestsError:
         sys.exit("Login rate-limited by Garmin (429). Wait a while before retrying.")
     except GarminConnectAuthenticationError as e:
-        sys.exit(
-            f"Garmin login failed: {e}. Check GARMIN_EMAIL / GARMIN_PASSWORD in .env."
-        )
+        sys.exit(f"Garmin login failed: {e}. Not retried; run the command again.")
     except GarminConnectConnectionError as e:
         sys.exit(f"Could not reach Garmin Connect: {e}")
+    print(f"Logged in. Session token saved in {tokenstore}.")
     return client
 
 

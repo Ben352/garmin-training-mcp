@@ -4,9 +4,9 @@ Usage:
     uv run garmin-fetch                          # last 90 days
     uv run garmin-fetch --start 2026-01-01 --end 2026-10-10 --out data/activities.csv
 
-Credentials come only from GARMIN_EMAIL / GARMIN_PASSWORD (loaded from .env).
-After the first successful login the session token is cached in GARMINTOKENS
-(default ~/.garminconnect), so later runs don't re-authenticate.
+Login uses the cached session token in GARMINTOKENS (default ~/.garminconnect).
+Only when it's missing or expired are you asked for your password (email from
+GARMIN_EMAIL in .env, or asked too). The password is never stored.
 
 Output includes activity names, location names and start/end GPS
 coordinates. It is written under data/, which is gitignored.
