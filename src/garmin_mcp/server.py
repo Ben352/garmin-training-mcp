@@ -16,6 +16,7 @@ from mcp_types import ToolAnnotations
 from garmin_mcp import db, sql_guard
 from garmin_mcp.audit import audited
 from garmin_mcp.fetch_activities import RUN_TYPES
+from garmin_mcp.queries import sql
 
 MAX_LIMIT = 500
 
@@ -33,35 +34,6 @@ mcp = MCPServer(
         "assumptions, and use few tokens where possible."
     ),
 )
-
-# Columns returned to the agent. GPS coordinates are stored but not exposed here.
-ACTIVITY_SQL = """
-SELECT
-    activity_id,
-    activity_type,
-    activity_name,
-    location_name,
-    activity_date,
-    start_time_local,
-    round(distance_m / 1000, 2)        AS distance_km,
-    round(duration_s / 60, 1)          AS duration_min,
-    avg_pace_s_per_km,
-    avg_hr_bpm,
-    max_hr_bpm,
-    elevation_gain_m,
-    calories_kcal,
-    avg_cadence_spm,
-    aerobic_training_effect,
-    anaerobic_training_effect,
-    training_load,
-    total_sets,
-    total_reps
-FROM activities
-WHERE activity_date BETWEEN ? AND ?
-  AND (? IS NULL OR activity_type = ?)
-ORDER BY start_time_local DESC
-LIMIT ?
-"""
 
 
 def format_pace(seconds_per_km: float | None) -> str | None:
@@ -157,81 +129,15 @@ def list_activities(
                     f"Unknown activity_type {activity_type!r}. Valid: {', '.join(known)}."
                 )
         rows = _query(
-            con, ACTIVITY_SQL, [start, end, activity_type, activity_type, limit + 1]
+            con,
+            sql("activities"),
+            [start, end, activity_type, activity_type, limit + 1],
         )
     return {
         "activities": rows[:limit],
         "count": min(len(rows), limit),
         "truncated": len(rows) > limit,
     }
-
-
-RUN_SQL = """
-SELECT
-    r.activity_id,
-    a.activity_name,
-    a.location_name,
-    a.activity_date,
-    r.start_time_local,
-    round(r.distance_m / 1000, 2)          AS distance_km,
-    round(r.duration_s / 60, 1)            AS duration_min,
-    round(r.moving_duration_s / 60, 1)     AS moving_duration_min,
-    round(r.elapsed_duration_s / 60, 1)    AS elapsed_duration_min,
-    r.avg_pace_s_per_km,
-    r.avg_moving_pace_s_per_km,
-    r.avg_gap_s_per_km,
-    r.best_pace_s_per_km,
-    r.avg_hr_bpm, r.max_hr_bpm, r.min_hr_bpm,
-    r.avg_cadence_spm, r.max_cadence_spm,
-    r.avg_power_w, r.max_power_w, r.normalized_power_w,
-    r.elevation_gain_m, r.elevation_loss_m, r.min_elevation_m, r.max_elevation_m,
-    r.avg_ground_contact_ms, r.avg_stride_length_cm,
-    r.avg_vertical_oscillation_cm, r.avg_vertical_ratio_pct,
-    r.aerobic_training_effect, r.anaerobic_training_effect,
-    r.training_effect_label, r.training_load,
-    r.workout_feel, r.workout_rpe,
-    r.body_battery_change, r.steps, r.n_laps,
-    v.vo2max_precise                      AS vo2max_at_run,
-    v.date                                AS vo2max_as_of
-FROM runs r
-JOIN activities a USING (activity_id)
-ASOF LEFT JOIN vo2max v ON a.activity_date >= v.date
-WHERE r.activity_id = ?
-"""
-
-HR_ZONES_SQL = """
-SELECT zone, seconds, round(seconds / 60, 1) AS minutes,
-       round(100 * seconds / nullif(sum(seconds) OVER (), 0), 1) AS pct
-FROM (
-    UNPIVOT (SELECT hr_z1_s, hr_z2_s, hr_z3_s, hr_z4_s, hr_z5_s FROM runs WHERE activity_id = ?)
-    ON hr_z1_s, hr_z2_s, hr_z3_s, hr_z4_s, hr_z5_s INTO NAME zone_col VALUE seconds
-)
-CROSS JOIN LATERAL (SELECT CAST(substr(zone_col, 5, 1) AS INTEGER) AS zone)
-ORDER BY zone
-"""
-
-WEATHER_SQL = """
-SELECT weather_temp_c AS temp_c, weather_apparent_temp_c AS apparent_temp_c,
-       weather_humidity_pct AS humidity_pct, weather_wind_speed_mph AS wind_speed_mph,
-       weather_desc AS description
-FROM runs WHERE activity_id = ?
-"""
-
-KM_SPLITS_SQL = """
-SELECT km, round(distance_m / 1000, 3) AS distance_km, is_partial,
-       duration_s, pace_s_per_km, gap_s_per_km,
-       avg_hr_bpm, max_hr_bpm, avg_cadence_spm, avg_power_w,
-       elevation_gain_m, elevation_loss_m
-FROM run_km_splits WHERE activity_id = ? ORDER BY km
-"""
-
-LAPS_SQL = """
-SELECT lap_index, intensity_type, round(distance_m / 1000, 3) AS distance_km,
-       duration_s, pace_s_per_km, gap_s_per_km,
-       avg_hr_bpm, max_hr_bpm, avg_cadence_spm, avg_power_w,
-       elevation_gain_m, elevation_loss_m
-FROM run_laps WHERE activity_id = ? ORDER BY lap_index
-"""
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
@@ -270,7 +176,7 @@ def get_run(activity_id: int) -> dict[str, Any]:
         Pace fields come as both *_s_per_km (number) and *_min_per_km ("m:ss").
     """
     with _connect_read_only() as con:
-        summary = _query(con, RUN_SQL, [activity_id])
+        summary = _query(con, sql("run_summary"), [activity_id])
         if not summary:
             found = con.execute(
                 "SELECT activity_type FROM activities WHERE activity_id = ?",
@@ -292,10 +198,10 @@ def get_run(activity_id: int) -> dict[str, Any]:
             )
         return {
             "summary": summary[0],
-            "hr_zones": _query(con, HR_ZONES_SQL, [activity_id]),
-            "weather": _query(con, WEATHER_SQL, [activity_id])[0],
-            "km_splits": _query(con, KM_SPLITS_SQL, [activity_id]),
-            "laps": _query(con, LAPS_SQL, [activity_id]),
+            "hr_zones": _query(con, sql("run_hr_zones"), [activity_id]),
+            "weather": _query(con, sql("run_weather"), [activity_id])[0],
+            "km_splits": _query(con, sql("run_km_splits"), [activity_id]),
+            "laps": _query(con, sql("run_laps"), [activity_id]),
         }
 
 
@@ -407,41 +313,15 @@ def daily_metrics(
     }
 
 
-RUN_TYPES_SQL = ", ".join(f"'{t}'" for t in sorted(RUN_TYPES))
-
-TRAINING_SQL = f"""
-SELECT
-    count(*) FILTER (WHERE activity_type IN ({RUN_TYPES_SQL}))       AS runs,
-    round(coalesce(sum(distance_m) FILTER (
-        WHERE activity_type IN ({RUN_TYPES_SQL})), 0) / 1000, 1)     AS run_km,
-    round(sum(moving_duration_s) FILTER (WHERE activity_type IN ({RUN_TYPES_SQL}))
-        / nullif(sum(distance_m) FILTER (
-            WHERE activity_type IN ({RUN_TYPES_SQL})), 0) * 1000, 1) AS run_avg_pace_s_per_km,
-    round(sum(avg_hr_bpm * duration_s) FILTER (WHERE activity_type IN ({RUN_TYPES_SQL}))
-        / nullif(sum(duration_s) FILTER (WHERE activity_type IN ({RUN_TYPES_SQL})
-            AND avg_hr_bpm IS NOT NULL), 0), 1)                     AS run_avg_hr_bpm,
-    max(distance_m) FILTER (WHERE activity_type IN ({RUN_TYPES_SQL})) / 1000
-                                                                     AS longest_run_km,
-    count(*) FILTER (WHERE activity_type = 'strength_training')      AS strength_sessions,
-    round(coalesce(sum(training_load), 0), 1)                        AS training_load_total
-FROM activities
-WHERE activity_date BETWEEN ? AND ?
-"""
-
-
 def _period(
     con: duckdb.DuckDBPyConnection, start: date, end: date, min_wear_hours: float
 ) -> dict[str, Any]:
     weeks = ((end - start).days + 1) / 7
-    training = _query(con, TRAINING_SQL, [start, end])[0]
+    training = _query(con, sql("training_period"), [sorted(RUN_TYPES), start, end])[0]
     training["run_km_per_week"] = round(training["run_km"] / weeks, 1)
     if training["longest_run_km"] is not None:
         training["longest_run_km"] = round(training["longest_run_km"], 2)
-    vo2 = con.execute(
-        "SELECT vo2max_precise, date FROM vo2max WHERE date <= ? "
-        "ORDER BY date DESC LIMIT 1",
-        [end],
-    ).fetchone()
+    vo2 = con.execute(sql("vo2max_as_of"), [end]).fetchone()
     training["vo2max_at_end"] = vo2[0] if vo2 else None
 
     wear_params = [] if min_wear_hours == 0 else [min_wear_hours * 3600]
@@ -635,10 +515,7 @@ def schema_tables() -> str:
     if not db.db_path().exists():
         return f"No database at {db.db_path()} yet. Run `uv run garmin-fetch` first."
     with db.connect(read_only=True) as con:
-        columns = con.execute(
-            "SELECT table_name, column_name, data_type FROM information_schema.columns "
-            "WHERE table_schema = 'main' ORDER BY table_name, ordinal_position"
-        ).fetchall()
+        columns = con.execute(sql("schema_columns")).fetchall()
         lines = [
             "# Garmin tables (DuckDB)",
             "",
@@ -649,6 +526,8 @@ def schema_tables() -> str:
             ),
         ]
         for table, note in TABLE_NOTES.items():
+            # Table names can't be ? parameters; these come from TABLE_NOTES, not
+            # the model, so formatting them in is safe.
             (n,) = con.execute(f"SELECT count(*) FROM {table}").fetchone()
             cols = [
                 f"{c} {t}"
