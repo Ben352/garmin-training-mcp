@@ -3,7 +3,8 @@ import pytest
 from mcp.client import Client
 
 from garmin_mcp import db
-from garmin_mcp.server import format_pace, mcp
+from garmin_mcp.server import mcp
+from garmin_mcp.tools.common import format_pace
 
 
 def activity(aid, day, type_="running", distance_m=10000.0, pace=300.0):
@@ -456,7 +457,7 @@ def test_query_errors(seeded, sql, message):
 
 
 def test_query_times_out(seeded, monkeypatch):
-    monkeypatch.setattr("garmin_mcp.server.QUERY_TIMEOUT_S", 0.2)
+    monkeypatch.setattr("garmin_mcp.tools.query.QUERY_TIMEOUT_S", 0.2)
     result = call(
         "query",
         {
