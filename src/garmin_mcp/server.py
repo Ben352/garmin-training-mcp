@@ -18,17 +18,23 @@ from garmin_mcp.tools.wellness import compare_periods, daily_metrics
 mcp = MCPServer(
     name="garmin",
     instructions=(
-        "Read-only access to the user's Garmin training data: runs and strength "
-        "sessions. Use list_activities to find activities and their activity_id, "
-        "then get_run for one run's splits, laps, HR zones and weather. Use "
-        "daily_metrics for sleep, resting HR, stress and steps, compare_periods "
-        "for period-over-period questions, and query (SQL; see schema://tables) "
-        "for anything else. For questions about recent days, call data_status first "
-        "to check the data covers them. Units are in field names (distance_km, "
-        "pace_min_per_km, ...); every *_s_per_km pace has a matching *_min_per_km "
-        "'m:ss' string. Dates are the local calendar date where the activity "
-        "started. Only state facts based on the data, don't make assumptions, and "
-        "use few tokens where possible."
+        "Read-only access to the user's own Garmin data: runs, strength sessions, "
+        "daily wellness (sleep, resting HR, stress, steps) and VO2 max.\n\n"
+        "Tools: data_status first for questions about recent days, to check the data "
+        "covers them. list_activities finds activities and their activity_id; "
+        "get_run gives one run's splits, laps, HR zones and weather. daily_metrics "
+        "for wellness over time, compare_periods for period-over-period questions, "
+        "query (SQL; see schema://tables) for anything else.\n\n"
+        "Units are in field names (distance_km, pace_min_per_km, ...); every "
+        "*_s_per_km pace has a matching *_min_per_km 'm:ss' string. Dates are local.\n\n"
+        "How to answer:\n"
+        "- Answer the question asked, briefly: lead with the answer, then only the "
+        "numbers that support it. No tables unless they're clearer than a sentence.\n"
+        "- State what the data shows. Don't give training advice, plans or "
+        "recommendations unless the user asks for them.\n"
+        "- Give the number of days or runs behind any average or comparison.\n"
+        "- When the data can't support a conclusion (few days, missing nights, low "
+        "wear, data not synced), say so instead of drawing it."
     ),
 )
 
