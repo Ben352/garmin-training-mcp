@@ -32,7 +32,6 @@ class FakeGarmin:
 def fake(monkeypatch, tmp_path):
     FakeGarmin.token_ok, FakeGarmin.password_ok, FakeGarmin.instances = True, True, []
     monkeypatch.setattr(cli, "Garmin", FakeGarmin)
-    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: None)
     monkeypatch.setenv("GARMINTOKENS", str(tmp_path / "tokens"))
     monkeypatch.delenv("GARMIN_SYNTHETIC", raising=False)
     monkeypatch.delenv("GARMIN_PASSWORD", raising=False)

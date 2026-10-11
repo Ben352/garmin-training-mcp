@@ -6,7 +6,7 @@ Usage:
 
 Login uses the cached session token in GARMINTOKENS (default ~/.garminconnect).
 Only when it's missing or expired are you asked for your password (email from
-GARMIN_EMAIL in .env, or asked too). The password is never stored.
+the GARMIN_EMAIL env var, or asked too). The password is never stored.
 
 Output includes activity names, location names and start/end GPS
 coordinates. It is written under data/, which is gitignored.

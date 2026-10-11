@@ -9,7 +9,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from garminconnect import (
     Garmin,
     GarminConnectAuthenticationError,
@@ -46,11 +45,10 @@ def login() -> Garmin:
 
         print("Synthetic mode: generated data, no Garmin account used.")
         return SyntheticGarmin()
-    load_dotenv(Path.cwd() / ".env")
     if os.getenv("GARMIN_PASSWORD"):
         print(
             "Note: GARMIN_PASSWORD is ignored; you'll be asked for the password when "
-            "needed. Remove it from .env.",
+            "needed. Unset it.",
             file=sys.stderr,
         )
     tokenstore = os.getenv("GARMINTOKENS", DEFAULT_TOKENSTORE)

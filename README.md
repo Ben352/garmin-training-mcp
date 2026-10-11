@@ -1,4 +1,6 @@
-# garmin-mcp
+# garmin-training-mcp
+
+[![CI](https://github.com/Ben352/garmin-training-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Ben352/garmin-training-mcp/actions/workflows/ci.yml)
 
 Pull your own Garmin Connect data (runs, strength sessions, daily wellness, sleep,
 VO2 max) into a local DuckDB database, and expose it to Claude through an MCP server so
@@ -6,6 +8,8 @@ it can answer questions about your training with real numbers.
 
 All data is written to `data/` (database `data/garmin.duckdb`, plus CSV exports), which
 is gitignored. Nothing personal gets committed.
+
+*Unofficial: not affiliated with or endorsed by Garmin.*
 
 ## Try it without a Garmin account
 
@@ -35,7 +39,7 @@ can ask Claude to find:
 To use it from Claude Code:
 
 ```bash
-claude mcp add garmin-demo -e GARMIN_SYNTHETIC=1 -- uv --directory /absolute/path/to/garmin-mcp run garmin-mcp
+claude mcp add garmin-demo -e GARMIN_SYNTHETIC=1 -- uv --directory /absolute/path/to/garmin-training-mcp run garmin-mcp
 ```
 
 ## Setup
@@ -43,13 +47,20 @@ claude mcp add garmin-demo -e GARMIN_SYNTHETIC=1 -- uv --directory /absolute/pat
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.12.
 
 ```bash
+git clone https://github.com/Ben352/garmin-training-mcp.git
+cd garmin-training-mcp
 uv sync
-cp .env.example .env    # fill in GARMIN_EMAIL and GARMIN_PASSWORD
 ```
 
-On the first run you log in with your email and password, and an MFA code if your
-account has one. The session token is then cached in `~/.garminconnect` (override with
-`GARMINTOKENS`), so later runs don't log in again. A failed login is never retried.
+No config file is needed. Optionally `export GARMIN_EMAIL=you@example.com` so login
+doesn't ask for your email.
+
+**Your password is never stored.** On the first run you're asked for it in the terminal
+(it isn't echoed), plus an MFA code if your account has one. Only the resulting session
+token is saved, in `~/.garminconnect` (override with `GARMINTOKENS`), so later runs log in
+without asking. You're asked again only when the token expires. A failed login is never
+retried. Without a terminal (e.g. a scheduled job) and without a valid token, the
+commands exit and tell you to log in once by hand.
 
 ## Run order
 
@@ -137,6 +148,7 @@ activities.csv ──► runs not in data/run_fetch_log.csv
 | `run_laps` | `activity_id, lap_index` | lap as recorded (auto-lap or workout step) | `garmin-fetch-runs` | rebuilt from cache |
 | `run_km_splits` | `activity_id, km` | km, calculated from the 1 s time series | `garmin-fetch-runs` | rebuilt from cache |
 | `run_fetch_log` | `activity_id` | fully loaded run (tracking table) | `garmin-fetch-runs` | rebuilt from log CSV |
+| `sync_log` | `id` | fetch command run against Garmin (when, date range, rows) | every fetch command | appended |
 
 Each table is also exported as `data/<table>.csv`.
 
@@ -171,6 +183,7 @@ the fetch commands first.
 
 | Tool | What it does |
 |---|---|
+| `data_status()` | How current the data is: latest date, row count and last sync time per source (activities, runs, daily, VO2 max), plus runs still waiting for details. Claude is told to check it before answering about recent days, so a stale sync isn't mistaken for "no activity". |
 | `list_activities(start, end, activity_type?, limit=50)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
 | `get_run(activity_id)` | One run in full: summary (timer/moving/grade-adjusted/best pace, HR, power, running dynamics, training effect, feel/RPE, VO2 max as of that date), time in each HR zone with %, weather, km splits, and laps. About 1–3k tokens per run. |
 | `daily_metrics(start, end, metrics?, min_wear_hours=4)` | One row per day of wellness data (steps, resting HR, stress, body battery, intensity minutes, sleep h/score, overnight HRV) plus `{n, mean, min, max}` per metric. Days the watch measured for less than `min_wear_hours` are skipped, since their HR and steps are unreliable (`0` keeps all). |
@@ -219,7 +232,7 @@ duckdb -readonly data/audit.duckdb \
 ### Use with Claude Code
 
 ```bash
-claude mcp add garmin -- uv --directory /absolute/path/to/garmin-mcp run garmin-mcp
+claude mcp add garmin -- uv --directory /absolute/path/to/garmin-training-mcp run garmin-mcp
 ```
 
 ### Use with Claude Desktop
@@ -231,7 +244,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "garmin": {
       "command": "uv",
-      "args": ["--directory", "/absolute/path/to/garmin-mcp", "run", "garmin-mcp"]
+      "args": ["--directory", "/absolute/path/to/garmin-training-mcp", "run", "garmin-mcp"]
     }
   }
 }
@@ -243,4 +256,14 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 uv run pytest          # synthetic/fake Garmin clients + temp DBs: no network, credentials or real data
 uv run ruff check .
 uv run ruff format .
+```
+
+Pre-commit hooks run on every `git commit`: **gitleaks** (secrets such as API keys,
+tokens and private keys), a **500 KB file-size limit** (a backstop in case a database or
+CSV slips past `.gitignore`), private-key and merge-conflict checks, and **ruff** lint and
+format. Install them once per clone:
+
+```bash
+uv run pre-commit install
+uv run pre-commit run --all-files    # optional: check the whole repo now
 ```
