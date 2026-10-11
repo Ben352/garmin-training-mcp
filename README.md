@@ -195,7 +195,13 @@ the fetch commands first.
 | `schema://tables` | Every table with its row count, columns and types, plus notes on keys, units and caveats. The model reads it before writing SQL for `query`. |
 
 Typical flow: Claude calls `list_activities` to find a run's `activity_id`, then `get_run`
-for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km`
+for the detail.
+
+**Stale data:** when `list_activities`, `daily_metrics` or `compare_periods` is asked about
+dates past the last sync, the result includes a `notes` entry such as *"daily data only
+reaches 2026-10-08 (last sync …); 2026-10-09 to 2026-10-11 isn't loaded"*, so Claude says
+the data may be incomplete instead of reporting an empty week. Coverage comes from the
+date ranges in `sync_log`, so a synced day with no activity isn't flagged. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km`
 (`"m:ss"`).
 
 **Safety:**

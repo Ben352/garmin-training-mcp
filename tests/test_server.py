@@ -1,3 +1,5 @@
+from datetime import date
+
 import anyio
 import duckdb
 import pytest
@@ -529,3 +531,53 @@ def test_data_status_on_database_without_sync_log(seeded):
 def test_data_status_without_database():
     result = call("data_status", {})
     assert result.is_error and "garmin-fetch" in result.content[0].text
+
+
+def test_list_activities_notes_dates_past_the_data(seeded):
+    # No sync recorded: coverage falls back to the latest activity (2026-10-05).
+    inside = call(
+        "list_activities", {"start": "2026-09-01", "end": "2026-10-05"}
+    ).structured_content
+    assert "notes" not in inside
+    past = call(
+        "list_activities", {"start": "2026-10-01", "end": "2026-10-11"}
+    ).structured_content
+    [note] = past["notes"]
+    assert "only reaches 2026-10-05" in note
+    assert "2026-10-06 to 2026-10-11 isn't loaded" in note
+
+
+def test_synced_days_without_activity_get_no_note(seeded):
+    # A sync covered up to Oct 31: no activities after Oct 5 is real, not missing.
+    with db.connect() as con:
+        db.log_sync(con, "garmin-fetch", date(2026, 8, 1), date(2026, 10, 31), 4)
+    data = call(
+        "list_activities", {"start": "2026-10-01", "end": "2026-10-31"}
+    ).structured_content
+    assert "notes" not in data
+    later = call(
+        "list_activities", {"start": "2026-11-01", "end": "2026-11-07"}
+    ).structured_content
+    assert "only reaches 2026-10-31 (last sync " in later["notes"][0]
+
+
+def test_daily_metrics_notes_dates_past_the_data(seeded_daily):
+    data = call(
+        "daily_metrics", {"start": "2026-09-01", "end": "2026-09-10"}
+    ).structured_content
+    assert "daily data only reaches 2026-09-04" in data["notes"][0]
+
+
+def test_compare_periods_notes_each_source(seeded_periods):
+    data = call(
+        "compare_periods",
+        {
+            "a_start": "2026-08-01",
+            "a_end": "2026-08-14",
+            "b_start": "2026-09-01",
+            "b_end": "2026-09-30",
+        },
+    ).structured_content
+    activities_note, daily_note = data["notes"]
+    assert activities_note.startswith("activities data only reaches 2026-09-11")
+    assert daily_note.startswith("daily data only reaches 2026-09-04")

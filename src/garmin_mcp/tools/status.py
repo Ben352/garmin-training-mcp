@@ -6,6 +6,7 @@ from typing import Any
 from garmin_mcp.fetch_activities import RUN_TYPES
 from garmin_mcp.queries import sql
 from garmin_mcp.tools.common import connect_read_only, jsonable
+from garmin_mcp.tools.coverage import has_table
 
 # Which fetch command keeps each data source up to date.
 SOURCES = {
@@ -40,10 +41,7 @@ def data_status() -> dict[str, Any]:
         cursor = con.execute(sql("data_coverage"), [sorted(RUN_TYPES)])
         columns = [d[0] for d in cursor.description]
         coverage = dict(zip(columns, cursor.fetchone()))
-        has_sync_log = con.execute(
-            "SELECT count(*) FROM information_schema.tables "
-            "WHERE table_name = 'sync_log'"
-        ).fetchone()[0]
+        has_sync_log = has_table(con, "sync_log")
         syncs = (
             {
                 cmd: (ran, synth)

@@ -7,6 +7,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from garmin_mcp.queries import sql
 from garmin_mcp.tools.common import MAX_LIMIT, connect_read_only, query_rows
+from garmin_mcp.tools.coverage import coverage_note
 
 
 def list_activities(
@@ -38,7 +39,8 @@ def list_activities(
         elevation_gain_m, calories_kcal, avg_cadence_spm (steps/min),
         aerobic_training_effect and anaerobic_training_effect (0-5),
         training_load, and for strength sessions total_sets and total_reps.
-        Fields that don't apply to an activity are null.
+        Fields that don't apply to an activity are null. A "notes" list appears
+        when the range goes past the synced data.
     """
     if start > end:
         raise ToolError(f"start ({start}) must be on or before end ({end}).")
@@ -62,8 +64,12 @@ def list_activities(
             sql("activities"),
             [start, end, activity_type, activity_type, limit + 1],
         )
-    return {
+        note = coverage_note(con, "activities", end)
+    result = {
         "activities": rows[:limit],
         "count": min(len(rows), limit),
         "truncated": len(rows) > limit,
     }
+    if note:
+        result["notes"] = [note]
+    return result

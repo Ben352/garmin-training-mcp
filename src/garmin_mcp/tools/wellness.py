@@ -14,6 +14,7 @@ from garmin_mcp.tools.common import (
     connect_read_only,
     query_rows,
 )
+from garmin_mcp.tools.coverage import coverage_note
 
 # Daily metrics exposed to the agent: name -> SQL expression over `daily`.
 # Tools only ever build SQL from these keys, never from user strings.
@@ -65,7 +66,8 @@ def daily_metrics(
     Returns:
         {"days": [{date, wear_h, <metric>...}], "summary": {<metric>: {n, mean,
         min, max}}, "days_excluded_low_wear": int}. Missing values are null and
-        don't count towards n.
+        don't count towards n. A "notes" list appears when the range goes past the
+        synced data.
     """
     check_range(start, end)
     check_wear(min_wear_hours)
@@ -88,6 +90,7 @@ def daily_metrics(
         total = con.execute(
             "SELECT count(*) FROM daily WHERE date BETWEEN ? AND ?", [start, end]
         ).fetchone()[0]
+        note = coverage_note(con, "daily", end)
     summary = {}
     for m in names:
         values = [d[m] for d in days if d[m] is not None]
@@ -97,11 +100,14 @@ def daily_metrics(
             "min": min(values, default=None),
             "max": max(values, default=None),
         }
-    return {
+    result = {
         "days": days,
         "summary": summary,
         "days_excluded_low_wear": total - len(days),
     }
+    if note:
+        result["notes"] = [note]
+    return result
 
 
 def _period(
@@ -174,7 +180,8 @@ def compare_periods(
         (latest VO2 max on or before the period end); and daily_avg: for each
         daily metric (see daily_metrics) {mean, n}. delta gives b - a as change
         and pct (% of a) for every training number and daily mean. For pace a
-        negative change means faster.
+        negative change means faster. A "notes" list appears when either period
+        goes past the synced data.
     """
     check_range(a_start, a_end, "a_")
     check_range(b_start, b_end, "b_")
@@ -182,6 +189,12 @@ def compare_periods(
     with connect_read_only() as con:
         a = _period(con, a_start, a_end, min_wear_hours)
         b = _period(con, b_start, b_end, min_wear_hours)
+        latest_end = max(a_end, b_end)
+        notes = [
+            n
+            for source in ("activities", "daily")
+            if (n := coverage_note(con, source, latest_end))
+        ]
     numeric = [k for k, v in a["training"].items() if not isinstance(v, str)]
     delta = {
         "training": {k: _delta(a["training"][k], b["training"][k]) for k in numeric},
@@ -190,4 +203,7 @@ def compare_periods(
             for m in DAILY_METRICS
         },
     }
-    return {"a": a, "b": b, "delta": delta}
+    result = {"a": a, "b": b, "delta": delta}
+    if notes:
+        result["notes"] = notes
+    return result
