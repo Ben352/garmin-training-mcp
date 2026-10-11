@@ -39,7 +39,7 @@ def query(sql: str) -> dict[str, Any]:
 
     Prefer the dedicated tools when they fit. Read the schema://tables resource
     for columns, units and join keys. Tables: activities, daily, vo2max, runs,
-    run_laps, run_km_splits, run_fetch_log. Units are in column names.
+    run_laps, run_km_splits, run_fetch_log, sync_log. Units are in column names.
 
     Rules: a single SELECT (WITH/UNION fine), plain table names, no table
     functions or file access. At most 500 rows come back, so aggregate in SQL

@@ -3,7 +3,7 @@ from collections import Counter
 
 import pytest
 
-from garmin_mcp import fetch_runs
+from garmin_mcp import db, fetch_runs
 from garmin_mcp.fetch_runs import km_splits, time_series
 
 
@@ -226,3 +226,19 @@ def test_run_tables_land_in_db_and_are_replaced_not_appended(workspace):
         "run_fetch_log": 2,
         "vo2max": 1,
     }
+
+
+def test_each_online_run_is_logged_but_offline_rebuild_is_not(workspace, monkeypatch):
+    fetch_runs.main()  # fetches runs 11 and 13
+    fetch_runs.main()  # nothing new
+    monkeypatch.setattr("sys.argv", ["garmin-fetch-runs", "--offline"])
+    fetch_runs.main()
+    with db.connect(read_only=True) as con:
+        logged = con.execute(
+            "SELECT command, range_start::VARCHAR, range_end::VARCHAR, rows_written "
+            "FROM sync_log ORDER BY id"
+        ).fetchall()
+    assert logged == [
+        ("garmin-fetch-runs", "2026-10-01", "2026-10-03", 2),
+        ("garmin-fetch-runs", "2026-10-01", "2026-10-03", 0),
+    ]

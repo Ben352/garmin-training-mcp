@@ -23,6 +23,8 @@ TABLE_NOTES = {
     "run_km_splits": "Per-kilometre splits computed from the 1 s time series "
     "(key activity_id, km). is_partial marks the final short split.",
     "run_fetch_log": "Bookkeeping: which runs have details loaded.",
+    "sync_log": "One row per fetch command run against Garmin: command, ran_at_utc, "
+    "the date range covered and rows written. Latest row per command = last sync.",
 }
 
 
@@ -40,7 +42,15 @@ def schema_tables() -> str:
                 "daily/vo2max on activity_date = date."
             ),
         ]
+        existing = {tbl for tbl, _, _ in columns}
         for table, note in TABLE_NOTES.items():
+            if table not in existing:  # older database: created by the next fetch
+                lines += [
+                    "",
+                    f"## {table} (not created yet: run a fetch command)",
+                    note,
+                ]
+                continue
             # Table names can't be ? parameters; these come from TABLE_NOTES, not
             # the model, so formatting them in is safe.
             (n,) = con.execute(f"SELECT count(*) FROM {table}").fetchone()

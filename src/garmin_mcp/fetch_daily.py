@@ -162,6 +162,7 @@ def main() -> None:
     write_csv(args.out, COLUMNS, rows)
     with db.connect() as con:
         db.merge(con, "daily", rows)
+        db.log_sync(con, "garmin-fetch-daily", args.start, args.end, len(rows))
         total = con.execute("SELECT count(*) FROM daily").fetchone()[0]
 
     # Summary only: coverage counts, never personal values.

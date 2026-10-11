@@ -113,6 +113,7 @@ def main() -> None:
     write_csv(args.out, COLUMNS, rows)
     with db.connect() as con:
         db.merge(con, "activities", [to_db_row(r) for r in rows])
+        db.log_sync(con, "garmin-fetch", args.start, args.end, len(rows))
         total = con.execute("SELECT count(*) FROM activities").fetchone()[0]
 
     # Summary only: counts and field coverage, never personal values.

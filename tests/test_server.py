@@ -1,4 +1,5 @@
 import anyio
+import duckdb
 import pytest
 from mcp.client import Client
 
@@ -482,3 +483,16 @@ def test_schema_resource(seeded):
     assert "## run_km_splits (0 rows)" in text
     assert "activity_date DATE" in text
     assert "start_lat" not in text
+
+
+def test_schema_resource_survives_database_without_newer_tables(seeded):
+    with duckdb.connect(str(db.db_path())) as con:
+        con.execute("DROP TABLE sync_log")  # as in a database made before sync_log
+
+    async def go():
+        async with Client(mcp) as client:
+            return (await client.read_resource("schema://tables")).contents[0].text
+
+    text = anyio.run(go)
+    assert "## sync_log (not created yet" in text
+    assert "## activities (4 rows)" in text

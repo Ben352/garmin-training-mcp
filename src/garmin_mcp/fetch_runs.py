@@ -533,7 +533,7 @@ def main() -> None:
         )
 
         client = login()
-        failed = 0
+        failed = fetched = 0
         for i, aid in enumerate(pending, 1):
             try:
                 raw = fetch_raw(client, aid)
@@ -550,6 +550,7 @@ def main() -> None:
                 continue
             save_raw(raw)
             append_log(raw)
+            fetched += 1
             print(f"\r  fetched {i}/{len(pending)}", end="", flush=True)
         if pending:
             print()
@@ -563,6 +564,16 @@ def main() -> None:
             with db.connect() as con:
                 db.merge(con, "vo2max", vo2)
             print(f"VO2 max: {len(vo2)} dated values → {DATA / 'vo2max.csv'}")
+
+        dates = list(run_dates.values())
+        with db.connect() as con:
+            db.log_sync(
+                con,
+                "garmin-fetch-runs",
+                min(dates, default=None),
+                max(dates, default=None),
+                fetched,
+            )
 
     n_runs, n_laps, n_splits = rebuild(loaded)
     print(

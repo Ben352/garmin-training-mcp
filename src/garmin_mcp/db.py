@@ -1,13 +1,15 @@
-"""DuckDB storage: connection, schema, and the two write patterns (merge, replace)."""
+"""DuckDB storage: connection, schema, the two write patterns (merge, replace),
+and the sync log."""
 
 import os
+from datetime import UTC, date, datetime
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import duckdb
 
-from garmin_mcp.config import data_dir
+from garmin_mcp.config import data_dir, synthetic
 
 
 def db_path() -> Path:
@@ -67,3 +69,25 @@ def replace(
     except Exception:
         con.execute("ROLLBACK")
         raise
+
+
+def log_sync(
+    con: duckdb.DuckDBPyConnection,
+    command: str,
+    range_start: date | None,
+    range_end: date | None,
+    rows_written: int,
+) -> None:
+    """Record that a fetch command ran against Garmin (see sync_log in schema.sql)."""
+    con.execute(
+        "INSERT INTO sync_log (command, ran_at_utc, range_start, range_end, "
+        "rows_written, synthetic) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            command,
+            datetime.now(UTC).replace(tzinfo=None),
+            range_start,
+            range_end,
+            rows_written,
+            synthetic(),
+        ],
+    )

@@ -20,6 +20,8 @@ source of truth for types). Write helpers in `src/garmin_mcp/db.py`:
   outside the batch are kept.
 - **`replace`** (delete-all + insert in one transaction) for `runs`, `run_laps`,
   `run_km_splits` and `run_fetch_log`, which are rebuilt from the raw run cache.
+- **`log_sync`** appends one row to `sync_log` each time a fetch command runs against
+  Garmin (not for `--offline` rebuilds).
 
 Relationships: `runs`, `run_laps`, `run_km_splits` and `run_fetch_log` → `activities`
 on `activity_id`. `daily` and `vo2max` are keyed by date (join activities on
@@ -333,3 +335,23 @@ Notes:
 | `date` | Only dates where Garmin updated VO2 max (15 in 90 days), not every day. Use the last known value for a date in between. |
 | `vo2max` | Whole-number value shown in the app. |
 | `vo2max_precise` | One decimal. Use this one for trends. |
+
+---
+
+## DuckDB table: `sync_log`
+
+One row per fetch command run against Garmin, appended (never merged or replaced). It
+answers "when did I last sync?", which the data tables can't: a latest activity of Oct 6
+could mean no runs since, or no sync since.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | bigint | Sequence, increasing in run order. |
+| `command` | str | `garmin-fetch`, `garmin-fetch-runs` or `garmin-fetch-daily`. |
+| `ran_at_utc` | timestamp | When the command wrote its data (UTC). |
+| `range_start`, `range_end` | date | Dates covered: the `--start`/`--end` range, or for runs the first and last run date in `activities.csv`. NULL if there were none. |
+| `rows_written` | int | Activities or days merged; for `garmin-fetch-runs`, runs newly fetched (0 when all were already loaded). |
+| `synthetic` | bool | True when the data came from `GARMIN_SYNTHETIC`. |
+
+Databases created before this table existed get it on the next fetch command (the server
+opens the database read-only and never creates tables).

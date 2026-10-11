@@ -4,6 +4,7 @@ import sys
 from datetime import date
 
 import anyio
+import duckdb
 import pytest
 from mcp.client import Client
 
@@ -140,6 +141,15 @@ def test_end_to_end_without_garmin_account(tmp_path, monkeypatch):
     assert not (tmp_path / "no-tokens").exists()  # never tried to log in
 
     monkeypatch.setenv("GARMIN_DB_PATH", str(data / "garmin.duckdb"))
+    with duckdb.connect(str(data / "garmin.duckdb"), read_only=True) as con:
+        synced = con.execute(
+            "SELECT command, synthetic FROM sync_log ORDER BY id"
+        ).fetchall()
+    assert synced == [
+        ("garmin-fetch", True),
+        ("garmin-fetch-runs", True),
+        ("garmin-fetch-daily", True),
+    ]
 
     async def go():
         async with Client(mcp) as client:

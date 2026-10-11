@@ -1,3 +1,5 @@
+from datetime import date
+
 import duckdb
 import pytest
 
@@ -107,3 +109,19 @@ def test_activity_db_row_cleaning():
         assert rows(
             con, "SELECT activity_date::VARCHAR, distance_m FROM activities"
         ) == [("2026-10-01", None)]
+
+
+def test_log_sync_appends_one_row_per_run(monkeypatch):
+    with db.connect() as con:
+        db.log_sync(con, "garmin-fetch", date(2026, 9, 1), date(2026, 9, 30), 12)
+        monkeypatch.setenv("GARMIN_SYNTHETIC", "1")
+        db.log_sync(con, "garmin-fetch-runs", None, None, 0)
+        logged = rows(
+            con,
+            "SELECT id, command, range_start, range_end, rows_written, synthetic, "
+            "ran_at_utc IS NOT NULL FROM sync_log ORDER BY id",
+        )
+    assert logged == [
+        (1, "garmin-fetch", date(2026, 9, 1), date(2026, 9, 30), 12, False, True),
+        (2, "garmin-fetch-runs", None, None, 0, True, True),
+    ]

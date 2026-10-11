@@ -2,6 +2,7 @@
 --
 -- Merged on their key every fetch (history builds up): activities, daily, vo2max
 -- Replaced from the raw run cache every fetch: runs, run_laps, run_km_splits, run_fetch_log
+-- Appended, one row per fetch command run: sync_log
 
 CREATE TABLE IF NOT EXISTS activities (
     activity_id               BIGINT PRIMARY KEY,
@@ -172,4 +173,17 @@ CREATE TABLE IF NOT EXISTS run_fetch_log (
     fetched_at_utc TIMESTAMP,
     n_samples      INTEGER,
     has_weather    BOOLEAN
+);
+
+-- One row per fetch command run against Garmin (not --offline rebuilds), so you can
+-- tell "no new data" apart from "not synced recently".
+CREATE SEQUENCE IF NOT EXISTS sync_log_id;
+CREATE TABLE IF NOT EXISTS sync_log (
+    id           BIGINT PRIMARY KEY DEFAULT nextval('sync_log_id'),
+    command      VARCHAR NOT NULL,   -- garmin-fetch, garmin-fetch-runs, garmin-fetch-daily
+    ran_at_utc   TIMESTAMP NOT NULL,
+    range_start  DATE,               -- dates the run covered (NULL if none)
+    range_end    DATE,
+    rows_written INTEGER,            -- activities/days merged, or runs newly fetched
+    synthetic    BOOLEAN NOT NULL    -- true when GARMIN_SYNTHETIC data was used
 );

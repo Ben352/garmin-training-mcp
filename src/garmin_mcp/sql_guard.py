@@ -17,6 +17,7 @@ ALLOWED_TABLES = frozenset(
         "run_laps",
         "run_km_splits",
         "run_fetch_log",
+        "sync_log",
     }
 )
 
