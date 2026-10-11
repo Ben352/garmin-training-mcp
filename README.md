@@ -164,6 +164,20 @@ for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km
      the GPS columns, so `SELECT *` can't return them either. Long queries are
      interrupted after 10 s.
 
+### Audit log
+
+Every tool call is recorded in `data/audit.duckdb` (override with `GARMIN_AUDIT_PATH`),
+table `audit_log`: time (UTC), tool, arguments as JSON (including the SQL sent to
+`query`), success or error message, duration, row count and result size in bytes.
+Result contents are never stored. It's a separate file so the server never needs write
+access to the main database. If the log can't be written, the call still succeeds and a
+warning goes to stderr.
+
+```bash
+duckdb -readonly data/audit.duckdb \
+  "SELECT called_at_utc, tool, ok, duration_ms, args FROM audit_log ORDER BY id DESC LIMIT 20"
+```
+
 ### Use with Claude Code
 
 ```bash

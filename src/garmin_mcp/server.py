@@ -14,6 +14,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
 from garmin_mcp import db, sql_guard
+from garmin_mcp.audit import audited
 from garmin_mcp.fetch_activities import RUN_TYPES
 
 MAX_LIMIT = 500
@@ -106,6 +107,7 @@ def _query(
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+@audited
 def list_activities(
     start: date,
     end: date,
@@ -233,6 +235,7 @@ FROM run_laps WHERE activity_id = ? ORDER BY lap_index
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+@audited
 def get_run(activity_id: int) -> dict[str, Any]:
     """Get full detail for one run: summary, HR zones, weather, km splits and laps.
 
@@ -338,6 +341,7 @@ def _wear_filter(min_wear_hours: float) -> str:
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+@audited
 def daily_metrics(
     start: date,
     end: date,
@@ -471,6 +475,7 @@ def _delta(a: float | None, b: float | None) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+@audited
 def compare_periods(
     a_start: date,
     a_end: date,
@@ -563,6 +568,7 @@ def _connect_sandboxed() -> duckdb.DuckDBPyConnection:
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+@audited
 def query(sql: str) -> dict[str, Any]:
     """Run one read-only DuckDB SELECT over the Garmin tables, for questions the
     other tools can't answer (custom aggregations, correlations, joins).
