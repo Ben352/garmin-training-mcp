@@ -1,8 +1,8 @@
 # garmin-mcp
 
 Pull your own Garmin Connect data (runs, strength sessions, daily wellness, sleep,
-VO2 max) into a local DuckDB database. Later this will feed an MCP server so Claude can
-answer questions about your training with real numbers.
+VO2 max) into a local DuckDB database, and expose it to Claude through an MCP server so
+it can answer questions about your training with real numbers.
 
 All data is written to `data/` (database `data/garmin.duckdb`, plus CSV exports), which
 is gitignored. Nothing personal gets committed.
@@ -124,10 +124,52 @@ a fetch command.
 Column definitions, units and data caveats (timezones, placeholder values on unworn days,
 °F weather, etc.) are in **[docs/schema.md](docs/schema.md)**.
 
+## MCP server
+
+`uv run garmin-mcp` starts the server over stdio. It reads `data/garmin.duckdb`, so run
+the fetch commands first.
+
+### Tools
+
+| Tool | What it does |
+|---|---|
+| `list_activities(start, end, activity_type?, limit=50)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
+
+More tools (run detail with splits, daily metrics, period comparison, read-only SQL) are
+planned.
+
+**Safety:**
+- Every call opens a fresh **read-only** connection, so the fetch commands can still write
+  between calls.
+- Bad input (dates in the wrong order, a limit outside 1–500, an unknown activity type)
+  returns an error message that tells the model how to fix the call.
+- GPS coordinates are stored but not included in tool output.
+
+### Use with Claude Code
+
+```bash
+claude mcp add garmin -- uv --directory /absolute/path/to/garmin-mcp run garmin-mcp
+```
+
+### Use with Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "garmin": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/garmin-mcp", "run", "garmin-mcp"]
+    }
+  }
+}
+```
+
 ## Development
 
 ```bash
-uv run pytest          # tests use a fake Garmin client, no network or credentials
+uv run pytest          # fake Garmin client + temp DB: no network, credentials or real data
 uv run ruff check .
 uv run ruff format .
 ```

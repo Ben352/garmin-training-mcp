@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5.6",
     "garminconnect>=0.3.17",
+    "mcp>=2.3.0",
     "python-dotenv>=1.2.4",
 ]
 
@@ -16,6 +17,7 @@ dependencies = [
 garmin-fetch = "garmin_mcp.fetch_activities:main"
 garmin-fetch-daily = "garmin_mcp.fetch_daily:main"
 garmin-fetch-runs = "garmin_mcp.fetch_runs:main"
+garmin-mcp = "garmin_mcp.server:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
