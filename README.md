@@ -135,18 +135,20 @@ the fetch commands first.
 |---|---|
 | `list_activities(start, end, activity_type?, limit=50)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
 | `get_run(activity_id)` | One run in full: summary (timer/moving/grade-adjusted/best pace, HR, power, running dynamics, training effect, feel/RPE, VO2 max as of that date), time in each HR zone with %, weather, km splits, and laps. About 1–3k tokens per run. |
+| `daily_metrics(start, end, metrics?, min_wear_hours=4)` | One row per day of wellness data (steps, resting HR, stress, body battery, intensity minutes, sleep h/score, overnight HRV) plus `{n, mean, min, max}` per metric. Days the watch measured for less than `min_wear_hours` are skipped, since their HR and steps are unreliable (`0` keeps all). |
+| `compare_periods(a_start, a_end, b_start, b_end, min_wear_hours=4)` | Baseline period `a` vs period `b`: runs, km, km/week, distance-weighted pace, time-weighted HR, longest run, strength sessions, training load, VO2 max at period end, and the mean + n of every daily metric. `delta` gives `b − a` and % change. |
 
 Typical flow: Claude calls `list_activities` to find a run's `activity_id`, then `get_run`
 for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km`
 (`"m:ss"`).
 
-More tools (daily metrics, period comparison, read-only SQL) are planned.
+More tools (read-only SQL) are planned.
 
 **Safety:**
 - Every call opens a fresh **read-only** connection, so the fetch commands can still write
   between calls.
-- Bad input (dates in the wrong order, a limit outside 1–500, an unknown activity type,
-  an id that isn't a run or whose details haven't been fetched) returns an error message
+- Bad input (dates in the wrong order, a range over 500 days, a limit outside 1–500, an
+  unknown activity type or metric, an id that isn't a run or whose details haven't been fetched) returns an error message
   that tells the model how to fix the call.
 - GPS coordinates are stored but not included in tool output.
 

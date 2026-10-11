@@ -50,7 +50,12 @@ def test_tools_are_listed_with_docstrings_and_read_only_hint():
             return (await client.list_tools()).tools
 
     tools = {t.name: t for t in anyio.run(go)}
-    assert set(tools) == {"list_activities", "get_run"}
+    assert set(tools) == {
+        "list_activities",
+        "get_run",
+        "daily_metrics",
+        "compare_periods",
+    }
     assert all(t.annotations.read_only_hint for t in tools.values())
     assert "newest first" in tools["list_activities"].description
     assert set(tools["list_activities"].input_schema["required"]) == {"start", "end"}
@@ -249,3 +254,144 @@ def test_get_run_errors_explain_what_to_do(seeded_run, activity_id, message):
     result = call("get_run", {"activity_id": activity_id})
     assert result.is_error
     assert message in result.content[0].text
+
+
+def day(d, wear_h=12, steps=8000, rhr=50, sleep_h=None, hrv=None):
+    return {
+        "date": d,
+        "wear_s": None if wear_h is None else int(wear_h * 3600),
+        "steps": steps,
+        "resting_hr_bpm": rhr,
+        "sleep_total_s": None if sleep_h is None else int(sleep_h * 3600),
+        "hrv_overnight_avg_ms": hrv,
+    }
+
+
+@pytest.fixture
+def seeded_daily():
+    with db.connect() as con:
+        db.merge(
+            con,
+            "daily",
+            [
+                day("2026-09-01", sleep_h=7.5, hrv=60.0),
+                day("2026-09-02", rhr=52),
+                day("2026-09-03", wear_h=2, steps=300, rhr=95),  # partial wear
+                day("2026-09-04", wear_h=None, steps=None, rhr=None),
+            ],
+        )
+
+
+def test_daily_metrics_filters_low_wear_and_summarises(seeded_daily):
+    data = call(
+        "daily_metrics",
+        {
+            "start": "2026-09-01",
+            "end": "2026-09-30",
+            "metrics": ["resting_hr_bpm", "sleep_h"],
+        },
+    ).structured_content
+    assert [d["date"] for d in data["days"]] == ["2026-09-01", "2026-09-02"]
+    assert data["days_excluded_low_wear"] == 2
+    assert set(data["days"][0]) == {"date", "wear_h", "resting_hr_bpm", "sleep_h"}
+    assert data["summary"]["resting_hr_bpm"] == {
+        "n": 2,
+        "mean": 51.0,
+        "min": 50,
+        "max": 52,
+    }
+    assert data["summary"]["sleep_h"] == {"n": 1, "mean": 7.5, "min": 7.5, "max": 7.5}
+
+
+def test_daily_metrics_wear_zero_keeps_every_day(seeded_daily):
+    data = call(
+        "daily_metrics",
+        {"start": "2026-09-01", "end": "2026-09-30", "min_wear_hours": 0},
+    ).structured_content
+    assert len(data["days"]) == 4 and data["days_excluded_low_wear"] == 0
+    assert data["summary"]["steps"]["n"] == 3
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ({"metrics": ["vo2"]}, "Valid: steps"),
+        ({"min_wear_hours": 25}, "min_wear_hours must be"),
+        ({"end": "2028-06-01"}, "limited to 500 days"),
+    ],
+)
+def test_daily_metrics_errors(seeded_daily, args, message):
+    result = call("daily_metrics", {"start": "2026-09-01", "end": "2026-09-30", **args})
+    assert result.is_error
+    assert message in result.content[0].text
+
+
+@pytest.fixture
+def seeded_periods(seeded_daily):
+    with db.connect() as con:
+        runs = [
+            # a: Aug 1-14, two runs, 20 km at 300 s/km
+            activity(10, "2026-08-02"),
+            activity(11, "2026-08-09"),
+            # b: Sep 1-14, three runs, 30 km at 280 s/km, plus one strength session
+            activity(12, "2026-09-01", pace=280.0),
+            activity(13, "2026-09-05", pace=280.0),
+            activity(14, "2026-09-10", pace=280.0),
+            activity(15, "2026-09-11", "strength_training", None, None),
+        ]
+        for r in runs:
+            r["moving_duration_s"] = (
+                r["avg_pace_s_per_km"] * r["distance_m"] / 1000
+                if r["distance_m"]
+                else None
+            )
+            r["training_load"] = 100.0
+        db.merge(con, "activities", runs)
+        db.merge(
+            con,
+            "vo2max",
+            [
+                {"date": "2026-08-01", "vo2max": 50, "vo2max_precise": 50.0},
+                {"date": "2026-09-08", "vo2max": 52, "vo2max_precise": 51.6},
+            ],
+        )
+
+
+def test_compare_periods(seeded_periods):
+    data = call(
+        "compare_periods",
+        {
+            "a_start": "2026-08-01",
+            "a_end": "2026-08-14",
+            "b_start": "2026-09-01",
+            "b_end": "2026-09-14",
+        },
+    ).structured_content
+    a, b = data["a"]["training"], data["b"]["training"]
+    assert (a["runs"], a["run_km"], a["run_km_per_week"]) == (2, 20.0, 10.0)
+    assert (b["runs"], b["run_km"], b["run_km_per_week"]) == (3, 30.0, 15.0)
+    assert (
+        a["run_avg_pace_min_per_km"] == "5:00" and b["run_avg_pace_s_per_km"] == 280.0
+    )
+    assert (a["strength_sessions"], b["strength_sessions"]) == (0, 1)
+    assert (a["vo2max_at_end"], b["vo2max_at_end"]) == (50.0, 51.6)
+    assert data["delta"]["training"]["run_km_per_week"] == {"change": 5.0, "pct": 50.0}
+    assert data["delta"]["training"]["run_avg_pace_s_per_km"]["change"] == -20.0
+    # a has no daily rows: mean null, n 0, delta null
+    assert data["a"]["daily_avg"]["steps"] == {"mean": None, "n": 0}
+    assert data["b"]["daily_avg"]["resting_hr_bpm"] == {"mean": 51.0, "n": 2}
+    assert data["delta"]["daily_avg"]["steps"] == {"change": None, "pct": None}
+
+
+def test_compare_periods_rejects_reversed_range(seeded_periods):
+    result = call(
+        "compare_periods",
+        {
+            "a_start": "2026-08-14",
+            "a_end": "2026-08-01",
+            "b_start": "2026-09-01",
+            "b_end": "2026-09-14",
+        },
+    )
+    assert result.is_error
+    assert "a_start" in result.content[0].text
