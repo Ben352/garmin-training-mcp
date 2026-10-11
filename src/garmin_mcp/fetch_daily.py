@@ -139,7 +139,7 @@ def build_rows(
 
 
 def main() -> None:
-    args = parse_args(__doc__.splitlines()[0], "data/daily.csv")
+    args = parse_args(__doc__.splitlines()[0], "daily.csv")
     client = login()
     days = (args.end - args.start).days + 1
     print(

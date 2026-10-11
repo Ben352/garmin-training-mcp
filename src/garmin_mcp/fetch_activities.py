@@ -97,7 +97,7 @@ def to_db_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
-    args = parse_args(__doc__.splitlines()[0], "data/activities.csv")
+    args = parse_args(__doc__.splitlines()[0], "activities.csv")
     client = login()
     print(f"Logged in. Fetching activities {args.start} → {args.end} ...")
     activities = client.get_activities_by_date(

@@ -19,6 +19,7 @@ garmin-fetch = "garmin_mcp.fetch_activities:main"
 garmin-fetch-daily = "garmin_mcp.fetch_daily:main"
 garmin-fetch-runs = "garmin_mcp.fetch_runs:main"
 garmin-mcp = "garmin_mcp.server:main"
+garmin-demo = "garmin_mcp.demo:main"
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]

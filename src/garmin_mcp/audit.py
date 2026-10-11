@@ -1,4 +1,4 @@
-"""Audit log of MCP tool calls, in its own DuckDB file (data/audit.duckdb).
+"""Audit log of MCP tool calls, in its own DuckDB file (<data dir>/audit.duckdb).
 
 One row per call: when, which tool, the arguments, whether it succeeded, how long it
 took and how big the result was. Result contents are never stored. A failure to write
@@ -17,7 +17,7 @@ from typing import Any
 
 import duckdb
 
-DEFAULT_AUDIT_PATH = "data/audit.duckdb"
+from garmin_mcp.config import data_dir
 
 SCHEMA = """
 CREATE SEQUENCE IF NOT EXISTS audit_log_id;
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 
 def audit_path() -> Path:
-    return Path(os.getenv("GARMIN_AUDIT_PATH", DEFAULT_AUDIT_PATH))
+    return Path(os.getenv("GARMIN_AUDIT_PATH") or data_dir() / "audit.duckdb")
 
 
 def _row_count(result: Any) -> int | None:

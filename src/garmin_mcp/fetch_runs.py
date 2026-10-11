@@ -31,9 +31,10 @@ from garminconnect import (
 
 from garmin_mcp import db
 from garmin_mcp.cli import login, report_empty_columns, write_csv
+from garmin_mcp.config import data_dir
 from garmin_mcp.fetch_activities import RUN_TYPES
 
-DATA = Path("data")
+DATA = data_dir()
 RAW_DIR = DATA / "raw" / "runs"
 LOG_PATH = DATA / "run_fetch_log.csv"
 LOG_COLUMNS = ["activity_id", "fetched_at_utc", "n_samples", "has_weather"]

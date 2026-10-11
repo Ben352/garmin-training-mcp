@@ -7,11 +7,11 @@ from typing import Any
 
 import duckdb
 
-DEFAULT_DB_PATH = "data/garmin.duckdb"
+from garmin_mcp.config import data_dir
 
 
 def db_path() -> Path:
-    return Path(os.getenv("GARMIN_DB_PATH", DEFAULT_DB_PATH))
+    return Path(os.getenv("GARMIN_DB_PATH") or data_dir() / "garmin.duckdb")
 
 
 def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:

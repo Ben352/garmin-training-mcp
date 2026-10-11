@@ -7,6 +7,37 @@ it can answer questions about your training with real numbers.
 All data is written to `data/` (database `data/garmin.duckdb`, plus CSV exports), which
 is gitignored. Nothing personal gets committed.
 
+## Try it without a Garmin account
+
+The repo runs end to end on synthetic data:
+
+```bash
+uv sync
+uv run garmin-demo                       # writes data/synthetic/ (about 20 s)
+GARMIN_SYNTHETIC=1 uv run garmin-mcp     # MCP server on the synthetic database
+```
+
+`garmin-demo` runs the normal fetch commands, but `GARMIN_SYNTHETIC=1` swaps the Garmin
+login for `SyntheticGarmin` (`src/garmin_mcp/synthetic.py`). It returns deterministic
+fake responses in Garmin's raw API shapes, including the quirks (°F weather, RPE ×10,
+placeholder values on unworn days), so the same parsing code is exercised. Output goes
+to `data/synthetic/`, never mixed with real data.
+
+The fictional athlete covers 2026-03-30 → 2026-09-30, about 110 runs, with patterns you
+can ask Claude to find:
+
+- easy pace improves from ~6:00 to ~5:30 /km and VO2 max from ~46 to ~50
+- 4-week training blocks with a lighter recovery week
+- an illness week (2026-07-13 → 07-19): no training, resting HR up, HRV down
+- higher HR on hot days, higher resting HR after short sleep or a hard day
+- a half marathon on 2026-09-27 after a taper
+
+To use it from Claude Code:
+
+```bash
+claude mcp add garmin-demo -e GARMIN_SYNTHETIC=1 -- uv --directory /absolute/path/to/garmin-mcp run garmin-mcp
+```
+
 ## Setup
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.12.
@@ -90,6 +121,13 @@ activities.csv ──► runs not in data/run_fetch_log.csv
 
 `data/garmin.duckdb` (override with `GARMIN_DB_PATH`). Schema: `src/garmin_mcp/schema.sql`.
 
+| Env var | Default | Meaning |
+|---|---|---|
+| `GARMIN_SYNTHETIC` | unset | `1` = synthetic data, no Garmin account |
+| `GARMIN_DATA_DIR` | `data/` (`data/synthetic/` when synthetic) | CSVs, raw cache, databases |
+| `GARMIN_DB_PATH` | `<data dir>/garmin.duckdb` | main database |
+| `GARMIN_AUDIT_PATH` | `<data dir>/audit.duckdb` | MCP audit log |
+
 | Table | Key | One row per | Written by | How |
 |---|---|---|---|---|
 | `activities` | `activity_id` | run or strength session | `garmin-fetch` | merge |
@@ -166,7 +204,7 @@ for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km
 
 ### Audit log
 
-Every tool call is recorded in `data/audit.duckdb` (override with `GARMIN_AUDIT_PATH`),
+Every tool call is recorded in `<data dir>/audit.duckdb` (override with `GARMIN_AUDIT_PATH`),
 table `audit_log`: time (UTC), tool, arguments as JSON (including the SQL sent to
 `query`), success or error message, duration, row count and result size in bytes.
 Result contents are never stored. It's a separate file so the server never needs write
@@ -202,7 +240,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ## Development
 
 ```bash
-uv run pytest          # fake Garmin client + temp DB: no network, credentials or real data
+uv run pytest          # synthetic/fake Garmin clients + temp DBs: no network, credentials or real data
 uv run ruff check .
 uv run ruff format .
 ```

@@ -16,11 +16,21 @@ from garminconnect import (
     GarminConnectTooManyRequestsError,
 )
 
+from garmin_mcp import config
+
 DEFAULT_TOKENSTORE = "~/.garminconnect"
 
 
 def login() -> Garmin:
-    """Log in once using cached tokens or env credentials. Exits on failure, never retries."""
+    """Log in once using cached tokens or env credentials. Exits on failure, never retries.
+
+    With GARMIN_SYNTHETIC=1 returns the synthetic client instead: no account needed.
+    """
+    if config.synthetic():
+        from garmin_mcp.synthetic import SyntheticGarmin
+
+        print("Synthetic mode: generated data, no Garmin account used.")
+        return SyntheticGarmin()
     load_dotenv(Path.cwd() / ".env")
     tokenstore = os.getenv("GARMINTOKENS", DEFAULT_TOKENSTORE)
     Path(tokenstore).expanduser().mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -43,15 +53,22 @@ def login() -> Garmin:
     return client
 
 
-def parse_args(description: str, default_out: str) -> argparse.Namespace:
-    """Parse --start / --end (default: last 90 days) and --out."""
-    today = date.today()
+def parse_args(description: str, default_name: str) -> argparse.Namespace:
+    """Parse --start / --end and --out (default: <data dir>/<default_name>).
+
+    Dates default to the last 90 days, or the fixed synthetic window in synthetic mode.
+    """
+    if config.synthetic():
+        from garmin_mcp.synthetic import WINDOW_END, WINDOW_START
+
+        default_start, default_end = WINDOW_START, WINDOW_END
+    else:
+        default_end = date.today()
+        default_start = default_end - timedelta(days=90)
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--start", type=date.fromisoformat, default=today - timedelta(days=90)
-    )
-    parser.add_argument("--end", type=date.fromisoformat, default=today)
-    parser.add_argument("--out", type=Path, default=Path(default_out))
+    parser.add_argument("--start", type=date.fromisoformat, default=default_start)
+    parser.add_argument("--end", type=date.fromisoformat, default=default_end)
+    parser.add_argument("--out", type=Path, default=config.data_dir() / default_name)
     args = parser.parse_args()
     if args.start > args.end:
         parser.error("--start must be on or before --end")
