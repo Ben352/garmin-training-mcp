@@ -134,15 +134,20 @@ the fetch commands first.
 | Tool | What it does |
 |---|---|
 | `list_activities(start, end, activity_type?, limit=50)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
+| `get_run(activity_id)` | One run in full: summary (timer/moving/grade-adjusted/best pace, HR, power, running dynamics, training effect, feel/RPE, VO2 max as of that date), time in each HR zone with %, weather, km splits, and laps. About 1–3k tokens per run. |
 
-More tools (run detail with splits, daily metrics, period comparison, read-only SQL) are
-planned.
+Typical flow: Claude calls `list_activities` to find a run's `activity_id`, then `get_run`
+for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km`
+(`"m:ss"`).
+
+More tools (daily metrics, period comparison, read-only SQL) are planned.
 
 **Safety:**
 - Every call opens a fresh **read-only** connection, so the fetch commands can still write
   between calls.
-- Bad input (dates in the wrong order, a limit outside 1–500, an unknown activity type)
-  returns an error message that tells the model how to fix the call.
+- Bad input (dates in the wrong order, a limit outside 1–500, an unknown activity type,
+  an id that isn't a run or whose details haven't been fetched) returns an error message
+  that tells the model how to fix the call.
 - GPS coordinates are stored but not included in tool output.
 
 ### Use with Claude Code

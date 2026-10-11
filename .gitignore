@@ -1,8 +1,17 @@
 # secrets & personal data — never commit
 .env
+.env.*
+!.env.example
 data/
-*.fit
+*.csv
 *.duckdb
+*.duckdb.wal
+*.json.gz
+*.fit
+# Garmin session tokens (default ~/.garminconnect; this catches a GARMINTOKENS inside the repo)
+.garminconnect/
+garth_tokens/
+oauth*_token.json
 
 .venv/
 __pycache__/
