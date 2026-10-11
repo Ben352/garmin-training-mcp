@@ -1,0 +1,25 @@
+# Runs on every `git commit`. Install once with: uv run pre-commit install
+# Run on all files manually with:            uv run pre-commit run --all-files
+repos:
+  # Secrets: passwords, API keys, tokens, private keys in staged changes.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # Backstop for personal data slipping past .gitignore (real data files are big).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+      - id: check-merge-conflict
+
+  # Same lint + format as `uv run ruff check --fix` / `uv run ruff format`.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
