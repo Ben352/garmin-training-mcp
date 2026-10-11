@@ -137,20 +137,32 @@ the fetch commands first.
 | `get_run(activity_id)` | One run in full: summary (timer/moving/grade-adjusted/best pace, HR, power, running dynamics, training effect, feel/RPE, VO2 max as of that date), time in each HR zone with %, weather, km splits, and laps. About 1–3k tokens per run. |
 | `daily_metrics(start, end, metrics?, min_wear_hours=4)` | One row per day of wellness data (steps, resting HR, stress, body battery, intensity minutes, sleep h/score, overnight HRV) plus `{n, mean, min, max}` per metric. Days the watch measured for less than `min_wear_hours` are skipped, since their HR and steps are unreliable (`0` keeps all). |
 | `compare_periods(a_start, a_end, b_start, b_end, min_wear_hours=4)` | Baseline period `a` vs period `b`: runs, km, km/week, distance-weighted pace, time-weighted HR, longest run, strength sessions, training load, VO2 max at period end, and the mean + n of every daily metric. `delta` gives `b − a` and % change. |
+| `query(sql)` | One read-only DuckDB `SELECT` for anything the other tools don't cover (correlations, custom aggregations, joins). At most 500 rows, 10 s timeout. |
+
+| Resource | What it holds |
+|---|---|
+| `schema://tables` | Every table with its row count, columns and types, plus notes on keys, units and caveats. The model reads it before writing SQL for `query`. |
 
 Typical flow: Claude calls `list_activities` to find a run's `activity_id`, then `get_run`
 for the detail. Every pace comes both as `*_s_per_km` (number) and `*_min_per_km`
 (`"m:ss"`).
 
-More tools (read-only SQL) are planned.
-
 **Safety:**
 - Every call opens a fresh **read-only** connection, so the fetch commands can still write
   between calls.
 - Bad input (dates in the wrong order, a range over 500 days, a limit outside 1–500, an
-  unknown activity type or metric, an id that isn't a run or whose details haven't been fetched) returns an error message
-  that tells the model how to fix the call.
-- GPS coordinates are stored but not included in tool output.
+  unknown activity type or metric, an id that isn't a run or whose details haven't been
+  fetched) returns an error message that tells the model how to fix the call.
+- GPS coordinates are stored but never included in tool output.
+- `query` has two layers of protection:
+  1. **Parser check** (`sql_guard.py`, using sqlglot): exactly one `SELECT` (CTEs and
+     `UNION` are fine), plain names of the known tables only, no table functions
+     (`read_csv`, `query`, ...), no schema-qualified names, and no functions that expose
+     settings or environment variables.
+  2. **Sandboxed connection**: read-only, with file and network access disabled and the
+     setting locked so SQL can't re-enable it. `activities` is shadowed by a view without
+     the GPS columns, so `SELECT *` can't return them either. Long queries are
+     interrupted after 10 s.
 
 ### Use with Claude Code
 

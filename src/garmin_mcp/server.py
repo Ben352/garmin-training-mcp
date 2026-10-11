@@ -4,6 +4,7 @@ Usage:
     uv run garmin-mcp
 """
 
+import threading
 from datetime import date, datetime
 from typing import Any
 
@@ -12,7 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ToolAnnotations
 
-from garmin_mcp import db
+from garmin_mcp import db, sql_guard
 from garmin_mcp.fetch_activities import RUN_TYPES
 
 MAX_LIMIT = 500
@@ -23,11 +24,11 @@ mcp = MCPServer(
         "Read-only access to the user's Garmin training data: runs and strength "
         "sessions. Use list_activities to find activities and their activity_id, "
         "then get_run for one run's splits, laps, HR zones and weather. Use "
-        "daily_metrics for sleep, resting HR, stress and steps, and compare_periods "
-        "for period-over-period questions. Units are in "
-        "field names (distance_km, pace_min_per_km, ...); every *_s_per_km pace has a "
-        "matching *_min_per_km 'm:ss' string. Dates are the local calendar date where "
-        "the activity started. Only state facts based on the data, don't make "
+        "daily_metrics for sleep, resting HR, stress and steps, compare_periods "
+        "for period-over-period questions, and query (SQL; see schema://tables) "
+        "for anything else. Units are in field names (distance_km, "
+        "pace_min_per_km, ...); every *_s_per_km pace has a matching *_min_per_km "
+        "'m:ss' string. Dates are the local calendar date where the activity started. Only state facts based on the data, don't make "
         "assumptions, and use few tokens where possible."
     ),
 )
@@ -514,6 +515,142 @@ def compare_periods(
         },
     }
     return {"a": a, "b": b, "delta": delta}
+
+
+GPS_COLUMNS = ("start_lat", "start_lon", "end_lat", "end_lon")
+QUERY_TIMEOUT_S = 10
+
+TABLE_NOTES = {
+    "activities": "One row per run or strength session (key activity_id). "
+    "activity_date is the local start date. avg_pace_s_per_km is moving-time "
+    "based, runs only. distance_m is NULL for strength.",
+    "daily": "One row per day (key date): steps, resting HR, stress, body "
+    "battery, intensity minutes, sleep, overnight HRV. Sleep belongs to the "
+    "wake-up date. Filter wear_s >= 4*3600 for reliable HR/steps. Sleep/HRV "
+    "are sparse.",
+    "vo2max": "Only dates Garmin changed VO2 max (key date). For the value on "
+    "a given day use ASOF JOIN ... ON x.date >= vo2max.date.",
+    "runs": "One row per run with full detail (key activity_id, joins "
+    "activities). avg_pace_s_per_km is timer based; also moving, GAP and best "
+    "pace. hr_z1_s..hr_z5_s = seconds per HR zone. workout_feel 0/25/50/75/100, "
+    "workout_rpe 1-10. weather_temp_c, weather_wind_speed_mph.",
+    "run_laps": "Laps as the watch recorded them (key activity_id, lap_index): "
+    "auto-laps or workout steps; intensity_type INTERVAL/ACTIVE/RECOVERY/...",
+    "run_km_splits": "Per-kilometre splits computed from the 1 s time series "
+    "(key activity_id, km). is_partial marks the final short split.",
+    "run_fetch_log": "Bookkeeping: which runs have details loaded.",
+}
+
+
+def _connect_sandboxed() -> duckdb.DuckDBPyConnection:
+    """Read-only connection for agent SQL: no file/network access (locked so SQL
+    can't re-enable it) and GPS columns hidden behind a temp view."""
+    if not db.db_path().exists():
+        raise ToolError(
+            f"No database at {db.db_path()}. Run `uv run garmin-fetch` first."
+        )
+    con = duckdb.connect(
+        str(db.db_path()),
+        read_only=True,
+        config={"enable_external_access": False, "lock_configuration": True},
+    )
+    catalog = con.execute("SELECT current_database()").fetchone()[0]
+    con.execute(
+        "CREATE TEMP VIEW activities AS SELECT * EXCLUDE "
+        f'({", ".join(GPS_COLUMNS)}) FROM "{catalog}".main.activities'
+    )
+    return con
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+def query(sql: str) -> dict[str, Any]:
+    """Run one read-only DuckDB SELECT over the Garmin tables, for questions the
+    other tools can't answer (custom aggregations, correlations, joins).
+
+    Prefer the dedicated tools when they fit. Read the schema://tables resource
+    for columns, units and join keys. Tables: activities, daily, vo2max, runs,
+    run_laps, run_km_splits, run_fetch_log. Units are in column names.
+
+    Rules: a single SELECT (WITH/UNION fine), plain table names, no table
+    functions or file access. At most 500 rows come back, so aggregate in SQL
+    rather than pulling raw rows. Queries time out after 10 s.
+
+    Args:
+        sql: The DuckDB SQL query.
+
+    Returns:
+        {"columns": [...], "rows": [{...}], "row_count": n, "truncated": bool}.
+        Every *_s_per_km column also gets a *_min_per_km "m:ss" string.
+    """
+    try:
+        sql_guard.validate(sql)
+    except sql_guard.UnsafeQuery as e:
+        raise ToolError(str(e)) from None
+
+    with _connect_sandboxed() as con:
+        timer = threading.Timer(QUERY_TIMEOUT_S, con.interrupt)
+        timer.start()
+        try:
+            cursor = con.execute(sql)
+            columns = [d[0] for d in cursor.description]
+            fetched = cursor.fetchmany(MAX_LIMIT + 1)
+        except duckdb.InterruptException:
+            raise ToolError(
+                f"Query took longer than {QUERY_TIMEOUT_S} s. Simplify or aggregate it."
+            ) from None
+        except duckdb.Error as e:
+            raise ToolError(f"DuckDB error: {e}") from None
+        finally:
+            timer.cancel()
+
+    rows = []
+    for values in fetched[:MAX_LIMIT]:
+        row = {}
+        for col, val in zip(columns, values):
+            row[col] = _jsonable(val)
+            if col.endswith("_s_per_km") and isinstance(val, int | float):
+                row[col.removesuffix("_s_per_km") + "_min_per_km"] = format_pace(val)
+        rows.append(row)
+    return {
+        "columns": columns,
+        "rows": rows,
+        "row_count": len(rows),
+        "truncated": len(fetched) > MAX_LIMIT,
+    }
+
+
+@mcp.resource(
+    "schema://tables",
+    name="tables",
+    description="Tables, columns, types, keys and row counts for the query tool.",
+    mime_type="text/markdown",
+)
+def schema_tables() -> str:
+    if not db.db_path().exists():
+        return f"No database at {db.db_path()} yet. Run `uv run garmin-fetch` first."
+    with db.connect(read_only=True) as con:
+        columns = con.execute(
+            "SELECT table_name, column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema = 'main' ORDER BY table_name, ordinal_position"
+        ).fetchall()
+        lines = [
+            "# Garmin tables (DuckDB)",
+            "",
+            (
+                "Units are in column names (_m, _s, _bpm, _s_per_km, _c, _pct, ...). "
+                "Dates are local. Join run tables to activities on activity_id and "
+                "daily/vo2max on activity_date = date."
+            ),
+        ]
+        for table, note in TABLE_NOTES.items():
+            (n,) = con.execute(f"SELECT count(*) FROM {table}").fetchone()
+            cols = [
+                f"{c} {t}"
+                for tbl, c, t in columns
+                if tbl == table and c not in GPS_COLUMNS
+            ]
+            lines += ["", f"## {table} ({n} rows)", note, "", ", ".join(cols)]
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:

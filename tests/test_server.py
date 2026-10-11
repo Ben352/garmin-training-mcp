@@ -55,6 +55,7 @@ def test_tools_are_listed_with_docstrings_and_read_only_hint():
         "get_run",
         "daily_metrics",
         "compare_periods",
+        "query",
     }
     assert all(t.annotations.read_only_hint for t in tools.values())
     assert "newest first" in tools["list_activities"].description
@@ -395,3 +396,88 @@ def test_compare_periods_rejects_reversed_range(seeded_periods):
     )
     assert result.is_error
     assert "a_start" in result.content[0].text
+
+
+def test_query_returns_rows_and_pace_strings(seeded):
+    data = call(
+        "query",
+        {
+            "sql": "SELECT activity_id, avg_pace_s_per_km FROM activities "
+            "WHERE activity_type = 'running' ORDER BY activity_id"
+        },
+    ).structured_content
+    assert data["columns"] == ["activity_id", "avg_pace_s_per_km"]
+    assert data["row_count"] == 3 and data["truncated"] is False
+    assert data["rows"][1] == {
+        "activity_id": 3,
+        "avg_pace_s_per_km": 302.4,
+        "avg_pace_min_per_km": "5:02",
+    }
+
+
+def test_query_caps_rows_at_500(seeded):
+    data = call(
+        "query",
+        {
+            "sql": "SELECT a.activity_id FROM activities a, activities b, activities c, "
+            "activities d, activities e"
+        },  # 4^5 = 1024 rows
+    ).structured_content
+    assert data["row_count"] == 500 and data["truncated"] is True
+
+
+def test_query_hides_gps_even_with_star(seeded):
+    data = call("query", {"sql": "SELECT * FROM activities"}).structured_content
+    assert not set(data["columns"]) & {"start_lat", "start_lon", "end_lat", "end_lon"}
+    for sql in [
+        "SELECT start_lat FROM activities",
+        "SELECT a.start_lon FROM activities a",
+    ]:
+        result = call("query", {"sql": sql})
+        assert result.is_error and "start_" in result.content[0].text
+    struct = call(
+        "query", {"sql": "SELECT activities FROM activities LIMIT 1"}
+    ).structured_content
+    assert "start_lat" not in struct["rows"][0]["activities"]
+
+
+@pytest.mark.parametrize(
+    ("sql", "message"),
+    [
+        ("DELETE FROM activities", "Only SELECT"),
+        ("SELECT * FROM read_csv('data/activities.csv')", "Table functions"),
+        ("SELECT nope FROM daily", "DuckDB error"),
+    ],
+)
+def test_query_errors(seeded, sql, message):
+    result = call("query", {"sql": sql})
+    assert result.is_error
+    assert message in result.content[0].text
+
+
+def test_query_times_out(seeded, monkeypatch):
+    monkeypatch.setattr("garmin_mcp.server.QUERY_TIMEOUT_S", 0.2)
+    result = call(
+        "query",
+        {
+            "sql": "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t "
+            "WHERE n < 10000000000) SELECT count(*) FROM t"
+        },
+    )
+    assert result.is_error
+    assert "longer than" in result.content[0].text
+
+
+def test_schema_resource(seeded):
+    async def go():
+        async with Client(mcp) as client:
+            listed = (await client.list_resources()).resources
+            read = await client.read_resource("schema://tables")
+            return listed, read.contents[0].text
+
+    listed, text = anyio.run(go)
+    assert [str(r.uri) for r in listed] == ["schema://tables"]
+    assert "## activities (4 rows)" in text
+    assert "## run_km_splits (0 rows)" in text
+    assert "activity_date DATE" in text
+    assert "start_lat" not in text
