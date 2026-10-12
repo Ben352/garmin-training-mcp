@@ -13,6 +13,7 @@ from garmin_mcp.tools.activities import list_activities
 from garmin_mcp.tools.query import query
 from garmin_mcp.tools.runs import get_run
 from garmin_mcp.tools.status import data_status
+from garmin_mcp.tools.sync import sync_garmin
 from garmin_mcp.tools.wellness import compare_periods, daily_metrics
 
 mcp = MCPServer(
@@ -21,7 +22,8 @@ mcp = MCPServer(
         "Read-only access to the user's own Garmin data: runs, strength sessions, "
         "daily wellness (sleep, resting HR, stress, steps) and VO2 max.\n\n"
         "Tools: data_status first for questions about recent days, to check the data "
-        "covers them. list_activities finds activities and their activity_id; "
+        "covers them; if it doesn't, offer to run sync_garmin, which fetches new data "
+        "from Garmin (at most once every 15 min). list_activities finds activities and their activity_id; "
         "get_run gives one run's splits, laps, HR zones and weather. daily_metrics "
         "for wellness over time, compare_periods for period-over-period questions, "
         "query (SQL; see schema://tables) for anything else.\n\n"
@@ -38,8 +40,15 @@ mcp = MCPServer(
     ),
 )
 
-# Every tool is read-only, touches only the local database, and is audited.
+# Every tool is audited. All but sync_garmin are read-only and local-only.
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+# sync_garmin writes new data and calls Garmin; re-running it is harmless.
+SYNC = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=True,
+)
 TOOLS = (
     data_status,
     list_activities,
@@ -51,6 +60,7 @@ TOOLS = (
 
 for tool in TOOLS:
     mcp.add_tool(audited(tool), annotations=READ_ONLY)
+mcp.add_tool(audited(sync_garmin), annotations=SYNC)
 
 mcp.resource(
     "schema://tables",

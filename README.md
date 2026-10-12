@@ -189,6 +189,7 @@ the fetch commands first.
 | `daily_metrics(start, end, metrics?, min_wear_hours=4)` | One row per day of wellness data (steps, resting HR, stress, body battery, intensity minutes, sleep h/score, overnight HRV) plus `{n, mean, min, max}` per metric. Days the watch measured for less than `min_wear_hours` are skipped, since their HR and steps are unreliable (`0` keeps all). |
 | `compare_periods(a_start, a_end, b_start, b_end, min_wear_hours=4)` | Baseline period `a` vs period `b`: runs, km, km/week, distance-weighted pace, time-weighted HR, longest run, strength sessions, training load, VO2 max at period end, and the mean + n of every daily metric. `delta` gives `b − a` and % change. |
 | `query(sql)` | One read-only DuckDB `SELECT` for anything the other tools don't cover (correlations, custom aggregations, joins). At most 500 rows, 10 s timeout. |
+| `sync_garmin()` | Fetches new data from Garmin by running the three fetch commands as child processes: from 2 days before the last sync up to today (at most 90 days). At most once every 15 minutes, 3-minute timeout. The only tool that writes or goes online, so it's annotated as not read-only; Claude Code asks before running it. If the session token has expired it says to log in once from a terminal, since it can never prompt for a password. |
 
 | Resource | What it holds |
 |---|---|
@@ -205,8 +206,9 @@ date ranges in `sync_log`, so a synced day with no activity isn't flagged. Every
 (`"m:ss"`).
 
 **Safety:**
-- Every call opens a fresh **read-only** connection, so the fetch commands can still write
-  between calls.
+- Every call except `sync_garmin` opens a fresh **read-only** connection, so the fetch
+  commands can still write between calls. While a sync or fetch is writing, tools answer
+  "Database is busy" instead of failing.
 - Bad input (dates in the wrong order, a range over 500 days, a limit outside 1–500, an
   unknown activity type or metric, an id that isn't a run or whose details haven't been
   fetched) returns an error message that tells the model how to fix the call.

@@ -63,8 +63,13 @@ def test_tools_are_listed_with_docstrings_and_read_only_hint():
         "daily_metrics",
         "compare_periods",
         "query",
+        "sync_garmin",
     }
+    sync = tools.pop("sync_garmin").annotations
     assert all(t.annotations.read_only_hint for t in tools.values())
+    assert not any(t.annotations.open_world_hint for t in tools.values())
+    assert not sync.read_only_hint and sync.open_world_hint
+    assert sync.idempotent_hint and not sync.destructive_hint
     assert "newest first" in tools["list_activities"].description
     assert set(tools["list_activities"].input_schema["required"]) == {"start", "end"}
     assert tools["get_run"].input_schema["required"] == ["activity_id"]
