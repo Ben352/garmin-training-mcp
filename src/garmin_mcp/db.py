@@ -16,14 +16,33 @@ def db_path() -> Path:
     return Path(os.getenv("GARMIN_DB_PATH") or data_dir() / "garmin.duckdb")
 
 
+class DatabaseBusy(Exception):
+    """Another process holds the database lock (a fetch or sync is writing)."""
+
+
+def open_duckdb(read_only: bool, **kwargs: Any) -> duckdb.DuckDBPyConnection:
+    """duckdb.connect on the main database, with lock conflicts as DatabaseBusy.
+
+    While one process writes, DuckDB lets no other process open the file, not even
+    read-only. Writers keep their connections short, so this clears in seconds.
+    """
+    try:
+        return duckdb.connect(str(db_path()), read_only=read_only, **kwargs)
+    except duckdb.IOException as e:
+        if "lock" not in str(e).lower():
+            raise
+        raise DatabaseBusy(
+            "Database is busy: a sync or fetch is writing to it. Try again in a moment."
+        ) from None
+
+
 def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:
     """Open the database. Writers should keep the connection short-lived: DuckDB
     allows only one process to hold a read-write connection at a time."""
-    path = db_path()
     if read_only:
-        return duckdb.connect(str(path), read_only=True)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(path))
+        return open_duckdb(read_only=True)
+    db_path().parent.mkdir(parents=True, exist_ok=True)
+    con = open_duckdb(read_only=False)
     con.execute(files("garmin_mcp").joinpath("schema.sql").read_text())
     return con
 

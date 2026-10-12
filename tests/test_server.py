@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from datetime import date
 
 import anyio
@@ -581,3 +583,53 @@ def test_compare_periods_notes_each_source(seeded_periods):
     activities_note, daily_note = data["notes"]
     assert activities_note.startswith("activities data only reaches 2026-09-11")
     assert daily_note.startswith("daily data only reaches 2026-09-04")
+
+
+LOCK_HOLDER = (
+    "import duckdb, sys; con = duckdb.connect(sys.argv[1]); "
+    "print('locked', flush=True); sys.stdin.read()"
+)
+
+
+@pytest.fixture
+def locked_by_other_process(seeded):
+    """Another process holds the write lock, as during a sync or fetch."""
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            LOCK_HOLDER,
+            str(db.db_path()),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert holder.stdout.readline().strip() == "locked"
+    yield
+    holder.stdin.close()
+    holder.wait(timeout=10)
+
+
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("list_activities", {"start": "2026-09-01", "end": "2026-09-30"}),
+        ("query", {"sql": "SELECT 1"}),
+        ("data_status", {}),
+    ],
+)
+def test_tools_report_busy_database_while_another_process_writes(
+    locked_by_other_process, tool, args
+):
+    result = call(tool, args)
+    assert result.is_error
+    assert "Database is busy: a sync or fetch" in result.content[0].text
+
+
+def test_schema_resource_reports_busy_database(locked_by_other_process):
+    async def go():
+        async with Client(mcp) as client:
+            return (await client.read_resource("schema://tables")).contents[0].text
+
+    assert anyio.run(go).startswith("Database is busy")

@@ -25,7 +25,10 @@ def connect_read_only() -> duckdb.DuckDBPyConnection:
         raise ToolError(
             f"No database at {db.db_path()}. Run `uv run garmin-fetch` first."
         )
-    return db.connect(read_only=True)
+    try:
+        return db.connect(read_only=True)
+    except db.DatabaseBusy as e:
+        raise ToolError(str(e)) from None
 
 
 def jsonable(value: Any) -> Any:

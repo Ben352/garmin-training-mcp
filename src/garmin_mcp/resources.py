@@ -31,7 +31,11 @@ TABLE_NOTES = {
 def schema_tables() -> str:
     if not db.db_path().exists():
         return f"No database at {db.db_path()} yet. Run `uv run garmin-fetch` first."
-    with db.connect(read_only=True) as con:
+    try:
+        con = db.connect(read_only=True)
+    except db.DatabaseBusy as e:
+        return str(e)
+    with con:
         columns = con.execute(sql("schema_columns")).fetchall()
         lines = [
             "# Garmin tables (DuckDB)",

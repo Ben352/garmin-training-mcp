@@ -20,11 +20,13 @@ def _connect_sandboxed() -> duckdb.DuckDBPyConnection:
         raise ToolError(
             f"No database at {db.db_path()}. Run `uv run garmin-fetch` first."
         )
-    con = duckdb.connect(
-        str(db.db_path()),
-        read_only=True,
-        config={"enable_external_access": False, "lock_configuration": True},
-    )
+    try:
+        con = db.open_duckdb(
+            read_only=True,
+            config={"enable_external_access": False, "lock_configuration": True},
+        )
+    except db.DatabaseBusy as e:
+        raise ToolError(str(e)) from None
     catalog = con.execute("SELECT current_database()").fetchone()[0]
     con.execute(
         "CREATE TEMP VIEW activities AS SELECT * EXCLUDE "
