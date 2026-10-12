@@ -1,5 +1,6 @@
 """query: one read-only SELECT written by the model, in a sandbox."""
 
+import json
 import threading
 from typing import Any
 
@@ -11,6 +12,8 @@ from garmin_mcp.tools.common import MAX_LIMIT, format_pace, jsonable
 
 GPS_COLUMNS = ("start_lat", "start_lon", "end_lat", "end_lon")
 QUERY_TIMEOUT_S = 10
+# Keeps one result from flooding the model's context (~12k tokens).
+MAX_RESULT_BYTES = 50_000
 
 
 def _connect_sandboxed() -> duckdb.DuckDBPyConnection:
@@ -44,15 +47,18 @@ def query(sql: str) -> dict[str, Any]:
     run_laps, run_km_splits, run_fetch_log, sync_log. Units are in column names.
 
     Rules: a single SELECT (WITH/UNION fine), plain table names, no table
-    functions or file access. At most 500 rows come back, so aggregate in SQL
-    rather than pulling raw rows. Queries time out after 10 s.
+    functions or file access. At most 500 rows and 50 KB come back, so
+    aggregate in SQL and select only the columns you need rather than pulling
+    raw rows. Queries time out after 10 s.
 
     Args:
         sql: The DuckDB SQL query.
 
     Returns:
         {"columns": [...], "rows": [{...}], "row_count": n, "truncated": bool}.
-        Every *_s_per_km column also gets a *_min_per_km "m:ss" string.
+        Every *_s_per_km column also gets a *_min_per_km "m:ss" string. When
+        truncated, a "note" says which limit was hit: don't treat the rows as
+        complete.
     """
     try:
         sql_guard.validate(sql)
@@ -75,17 +81,31 @@ def query(sql: str) -> dict[str, Any]:
         finally:
             timer.cancel()
 
-    rows = []
+    rows, size, note = [], 0, None
     for values in fetched[:MAX_LIMIT]:
         row = {}
         for col, val in zip(columns, values):
             row[col] = jsonable(val)
             if col.endswith("_s_per_km") and isinstance(val, int | float):
                 row[col.removesuffix("_s_per_km") + "_min_per_km"] = format_pace(val)
+        size += len(json.dumps(row, default=str))
+        if size > MAX_RESULT_BYTES:
+            note = (
+                f"Result cut at {len(rows)} rows: it exceeded {MAX_RESULT_BYTES // 1000} "
+                "KB. Select fewer columns or aggregate in SQL."
+            )
+            break
         rows.append(row)
-    return {
+    if note is None and len(fetched) > MAX_LIMIT:
+        note = (
+            f"Result cut at {MAX_LIMIT} rows. Aggregate in SQL or add a WHERE clause."
+        )
+    result = {
         "columns": columns,
         "rows": rows,
         "row_count": len(rows),
-        "truncated": len(fetched) > MAX_LIMIT,
+        "truncated": note is not None,
     }
+    if note:
+        result["note"] = note
+    return result

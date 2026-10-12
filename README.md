@@ -184,11 +184,11 @@ the fetch commands first.
 | Tool | What it does |
 |---|---|
 | `data_status()` | How current the data is: latest date, row count and last sync time per source (activities, runs, daily, VO2 max), plus runs still waiting for details. Claude is told to check it before answering about recent days, so a stale sync isn't mistaken for "no activity". |
-| `list_activities(start, end, activity_type?, limit=50)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
+| `list_activities(start, end, activity_type?, limit=10)` | Activities between two local dates (inclusive), newest first. Returns distance (km), duration (min), pace (`m:ss` and s/km), HR, cadence, elevation, training effect/load, and sets/reps for strength. `truncated: true` when more than `limit` match. |
 | `get_run(activity_id)` | One run in full: summary (timer/moving/grade-adjusted/best pace, HR, power, running dynamics, training effect, feel/RPE, VO2 max as of that date), time in each HR zone with %, weather, km splits, and laps. About 1–3k tokens per run. |
 | `daily_metrics(start, end, metrics?, min_wear_hours=4)` | One row per day of wellness data (steps, resting HR, stress, body battery, intensity minutes, sleep h/score, overnight HRV) plus `{n, mean, min, max}` per metric. Days the watch measured for less than `min_wear_hours` are skipped, since their HR and steps are unreliable (`0` keeps all). |
 | `compare_periods(a_start, a_end, b_start, b_end, min_wear_hours=4)` | Baseline period `a` vs period `b`: runs, km, km/week, distance-weighted pace, time-weighted HR, longest run, strength sessions, training load, VO2 max at period end, and the mean + n of every daily metric. `delta` gives `b − a` and % change. |
-| `query(sql)` | One read-only DuckDB `SELECT` for anything the other tools don't cover (correlations, custom aggregations, joins). At most 500 rows, 10 s timeout. |
+| `query(sql)` | One read-only DuckDB `SELECT` for anything the other tools don't cover (correlations, custom aggregations, joins). At most 500 rows and 50 KB (`truncated` plus a `note` when cut), 10 s timeout. |
 | `sync_garmin()` | Fetches new data from Garmin by running the three fetch commands as child processes: from 2 days before the last sync up to today (at most 90 days). At most once every 15 minutes, 3-minute timeout. The only tool that writes or goes online, so it's annotated as not read-only; Claude Code asks before running it. If the session token has expired it says to log in once from a terminal, since it can never prompt for a password. |
 
 | Resource | What it holds |

@@ -14,7 +14,7 @@ def list_activities(
     start: date,
     end: date,
     activity_type: str | None = None,
-    limit: int = 50,
+    limit: int = 10,
 ) -> dict[str, Any]:
     """List the user's activities between two dates, newest first.
 
@@ -27,8 +27,10 @@ def list_activities(
         activity_type: Filter to one type, e.g. "running" or "strength_training".
             Omit to include all types. An unknown type returns an error listing
             the valid ones.
-        limit: Maximum activities to return (1-500, default 50). If more match,
-            `truncated` is true: narrow the date range or raise the limit.
+        limit: Maximum activities to return (1-500, default 10). Keep the
+            default unless the user asks for more, or the question needs every
+            activity in the range (e.g. "all my runs in May"). If more match,
+            `truncated` is true: say so, or raise the limit if the answer needs them.
 
     Returns:
         {"activities": [...], "count": n, "truncated": bool}. Each activity has:

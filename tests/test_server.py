@@ -71,7 +71,9 @@ def test_tools_are_listed_with_docstrings_and_read_only_hint():
     assert not sync.read_only_hint and sync.open_world_hint
     assert sync.idempotent_hint and not sync.destructive_hint
     assert "newest first" in tools["list_activities"].description
-    assert set(tools["list_activities"].input_schema["required"]) == {"start", "end"}
+    listing = tools["list_activities"].input_schema
+    assert set(listing["required"]) == {"start", "end"}
+    assert listing["properties"]["limit"]["default"] == 10
     assert tools["get_run"].input_schema["required"] == ["activity_id"]
 
 
@@ -436,6 +438,19 @@ def test_query_caps_rows_at_500(seeded):
         },  # 4^5 = 1024 rows
     ).structured_content
     assert data["row_count"] == 500 and data["truncated"] is True
+    assert "500 rows" in data["note"]
+
+
+def test_query_caps_result_size(seeded):
+    data = call(
+        "query",
+        {
+            "sql": "SELECT repeat('x', 1000) AS s FROM activities a, activities b, "
+            "activities c"
+        },  # 64 rows of ~1 KB
+    ).structured_content
+    assert data["truncated"] is True and 40 <= data["row_count"] < 50
+    assert "50 KB" in data["note"]
 
 
 def test_query_hides_gps_even_with_star(seeded):
