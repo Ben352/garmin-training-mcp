@@ -1,5 +1,5 @@
 -- Activities in a date range, newest first. GPS columns deliberately left out.
--- Params: start, end, activity_type (or NULL), activity_type (again), limit
+-- Params: start, end, activity_type (or NULL), types to match (list), limit
 SELECT
     activity_id,
     activity_type,
@@ -22,6 +22,6 @@ SELECT
     total_reps
 FROM activities
 WHERE activity_date BETWEEN ? AND ?
-  AND (? IS NULL OR activity_type = ?)
+  AND (? IS NULL OR list_contains(?, activity_type))
 ORDER BY start_time_local DESC
 LIMIT ?

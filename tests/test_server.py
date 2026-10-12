@@ -93,6 +93,28 @@ def test_filter_by_type(seeded):
     assert [a["activity_id"] for a in data["activities"]] == [4, 3, 1]
 
 
+def test_running_includes_every_run_type(seeded):
+    with db.connect() as con:
+        db.merge(
+            con,
+            "activities",
+            [
+                activity(5, "2026-09-20", "trail_running"),
+                activity(6, "2026-09-21", "treadmill_running"),
+            ],
+        )
+    span = {"start": "2026-09-01", "end": "2026-09-30"}
+    runs = call("list_activities", {**span, "activity_type": "running"})
+    assert [a["activity_id"] for a in runs.structured_content["activities"]] == [
+        3,
+        6,
+        5,
+        1,
+    ]
+    trail = call("list_activities", {**span, "activity_type": "trail_running"})
+    assert [a["activity_id"] for a in trail.structured_content["activities"]] == [5]
+
+
 def test_units_and_formatting(seeded):
     data = call(
         "list_activities", {"start": "2026-09-30", "end": "2026-09-30"}

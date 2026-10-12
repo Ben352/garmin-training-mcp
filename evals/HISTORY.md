@@ -7,3 +7,4 @@ linked JSON.
 | ran | commit | label | model | passed | turns | cost | failed | details |
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-12 21:18 | 65a07ef+dirty | baseline | claude-sonnet-5-5 | 14/15 | 47 | $0.38 | runs_in_may | [json](results/20261012-211835-claude-sonnet-5-5.json) |
+| 2026-10-12 21:31 | 65a07ef+dirty | "running" matches every run type | claude-sonnet-5-5 | 15/15 | 48 | $0.47 | - | [json](results/20261012-213134-claude-sonnet-5-5.json) |

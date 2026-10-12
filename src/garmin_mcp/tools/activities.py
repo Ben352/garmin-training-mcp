@@ -5,6 +5,7 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
+from garmin_mcp.fetch_activities import RUN_TYPES
 from garmin_mcp.queries import sql
 from garmin_mcp.tools.common import MAX_LIMIT, connect_read_only, query_rows
 from garmin_mcp.tools.coverage import coverage_note
@@ -24,9 +25,10 @@ def list_activities(
     Args:
         start: First local calendar date to include (YYYY-MM-DD), inclusive.
         end: Last local calendar date to include (YYYY-MM-DD), inclusive.
-        activity_type: Filter to one type, e.g. "running" or "strength_training".
-            Omit to include all types. An unknown type returns an error listing
-            the valid ones.
+        activity_type: Filter by type. "running" means every kind of run (road,
+            trail, treadmill, track, ...); a specific type such as "trail_running"
+            or "strength_training" matches only that type. Omit to include all
+            types. An unknown type returns an error listing the valid ones.
         limit: Maximum activities to return (1-500, default 10). Keep the
             default unless the user asks for more, or the question needs every
             activity in the range (e.g. "all my runs in May"). If more match,
@@ -49,6 +51,7 @@ def list_activities(
     if not 1 <= limit <= MAX_LIMIT:
         raise ToolError(f"limit must be between 1 and {MAX_LIMIT}, got {limit}.")
 
+    types = sorted(RUN_TYPES) if activity_type == "running" else [activity_type]
     with connect_read_only() as con:
         if activity_type is not None:
             known = [
@@ -57,14 +60,14 @@ def list_activities(
                     "SELECT DISTINCT activity_type FROM activities ORDER BY 1"
                 ).fetchall()
             ]
-            if activity_type not in known:
+            if activity_type not in [*known, "running"]:
                 raise ToolError(
                     f"Unknown activity_type {activity_type!r}. Valid: {', '.join(known)}."
                 )
         rows = query_rows(
             con,
             sql("activities"),
-            [start, end, activity_type, activity_type, limit + 1],
+            [start, end, activity_type, types, limit + 1],
         )
         note = coverage_note(con, "activities", end)
     result = {
