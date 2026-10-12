@@ -1,0 +1,765 @@
+{
+  "ran_at": "2026-10-12T21:18:35",
+  "commit": "65a07ef+dirty",
+  "label": "baseline",
+  "model": "claude-sonnet-5-5",
+  "grader_model": "claude-sonnet-5-5",
+  "passed": 14,
+  "total": 15,
+  "turns": 47,
+  "cost_usd": 0.38,
+  "results": [
+    {
+      "id": "race_time",
+      "question": "What was my finish time in the half marathon?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer gives 1:31:54 on 27 Sep 2026, which matches the expected 1:31:53 or 1:31:54, and the extra pace and distance details do not contradict it."
+      },
+      "answer": "Your finish time in the Riverside Half Marathon on 27 Sep 2026 was **about 1:31:54**. That is the watch's timer time for 21.10 km, an average pace of 4:21/km.\n\nThis is synthetic demo data. The time comes from the watch recording, not an official race result, so it may differ slightly from your chip time.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_name, activity_date, distance_km, duration_min, avg_pace_min_per_km from activities where activity_type='running' and distance_km between 20.5 and 22.5 order by activity_date desc limit 20"
+          },
+          "is_error": true,
+          "result_chars": 418
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_name, activity_date, distance_m, duration_s, avg_pace_s_per_km from activities where activity_type='running' and distance_m between 20000 and 23000 order by activity_date desc limit 20"
+          },
+          "is_error": false,
+          "result_chars": 1222
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 1400,
+        "cache_read": 16333,
+        "output": 406
+      },
+      "grader_usage": {
+        "input": 324,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 76
+      },
+      "cost_usd": 0.0123,
+      "duration_s": 7.5,
+      "error": null
+    },
+    {
+      "id": "race_fastest_km",
+      "question": "Which kilometre of my half marathon was the fastest, and how fast was it?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer gives km 16 at 4:18/km (257.7 s), matching the expected answer; the stray 'quicker' for the 4:29/km partial split is a wording slip about an excluded split and does not contradict the expected result."
+      },
+      "answer": "Your fastest full kilometre in the Riverside Half Marathon (27 Sep 2026) was **km 16, at 4:18/km**. It took 257.7 s, with an average heart rate of 181 bpm.\n\nKilometres 11, 6 and 3 were almost identical, at 258.1 s, 258.3 s and 258.8 s. Km 16 is ahead of them by less than a second, so the pacing was very even.\n\nThe final partial split, the last 97.5 m, was quicker at 4:29/km pace. I left it out because it isn't a full kilometre.",
+      "tool_calls": [
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, distance_km, duration_min, activity_name from activities where activity_type='running' and distance_km between 20 and 23 order by activity_date desc"
+          },
+          "is_error": true,
+          "result_chars": 416
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, distance_m, duration_s, activity_name from activities where activity_type='running' and distance_m between 20000 and 23000 order by activity_date desc"
+          },
+          "is_error": false,
+          "result_chars": 913
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select * from run_km_splits where activity_id=2026092701 order by duration_s limit 5"
+          },
+          "is_error": false,
+          "result_chars": 2506
+        }
+      ],
+      "turns": 4,
+      "usage": {
+        "input": 10,
+        "cache_write": 2264,
+        "cache_read": 21833,
+        "output": 470
+      },
+      "grader_usage": {
+        "input": 398,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 496
+      },
+      "cost_usd": 0.0205,
+      "duration_s": 11.3,
+      "error": null
+    },
+    {
+      "id": "race_hr_zone",
+      "question": "How much of the half marathon did I spend in heart-rate zone 5?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer gives about 90.8 minutes (5450 s \u2248 90.83 min) and 98.8% of the race, matching the expected ~91 minutes and ~99%; the extra details do not contradict it."
+      },
+      "answer": "You spent about 90.8 minutes in zone 5 in the Riverside Half Marathon on 27 Sep 2026. That is 98.8% of the 91.9-minute race.\n\nOnly about 1 minute was spent outside zone 5: 34 seconds in zone 4 and a few seconds each in zones 1\u20133. Your average heart rate was 179 bpm and your max was 186 bpm. Most of the kilometre splits averaged 179\u2013181 bpm.\n\nZone 5 covering almost the whole race is unusual. It may mean your zone thresholds are set low relative to your race effort. I can't tell that from this data.",
+      "tool_calls": [
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, activity_name, distance_km, duration_min from activities where activity_type='running' and distance_km between 20 and 23 order by activity_date desc"
+          },
+          "is_error": true,
+          "result_chars": 416
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, activity_name, distance_m, duration_s from activities where activity_type='running' and distance_m between 20000 and 23000 order by activity_date desc"
+          },
+          "is_error": false,
+          "result_chars": 913
+        },
+        {
+          "name": "get_run",
+          "input": {
+            "activity_id": 2026092701
+          },
+          "is_error": false,
+          "result_chars": 20058
+        }
+      ],
+      "turns": 4,
+      "usage": {
+        "input": 10,
+        "cache_write": 11634,
+        "cache_read": 21823,
+        "output": 465
+      },
+      "grader_usage": {
+        "input": 436,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 240
+      },
+      "cost_usd": 0.0414,
+      "duration_s": 9.5,
+      "error": null
+    },
+    {
+      "id": "race_weather",
+      "question": "What was the weather like during my half marathon?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer states a temperature of 16.7 \u00b0C, matching the expected value, and the other weather details are allowed extras."
+      },
+      "answer": "Conditions were mild and clear for your Riverside Half Marathon on 27 Sep 2026 (9:00 start):\n\n- **Temperature:** 16.7 \u00b0C, feeling like 15.6 \u00b0C\n- **Humidity:** 73%\n- **Wind:** 10 mph\n- **Sky:** Clear\n\nThe data comes from the nearest weather station, not from your watch. It's a single reading for the whole run, so it doesn't show any change over the 92 minutes.",
+      "tool_calls": [
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, activity_name, distance_km, duration_min from activities where activity_type='running' and distance_km between 20.5 and 22.5 order by activity_date desc"
+          },
+          "is_error": true,
+          "result_chars": 418
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select activity_id, activity_date, activity_name, location_name, distance_m/1000 as km, duration_s/60 as min from activities where activity_type='running' and distance_m between 20500 and 22500 order by activity_date desc"
+          },
+          "is_error": false,
+          "result_chars": 829
+        },
+        {
+          "name": "get_run",
+          "input": {
+            "activity_id": 2026092701
+          },
+          "is_error": false,
+          "result_chars": 20058
+        }
+      ],
+      "turns": 4,
+      "usage": {
+        "input": 10,
+        "cache_write": 11596,
+        "cache_read": 21772,
+        "output": 434
+      },
+      "grader_usage": {
+        "input": 350,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 52
+      },
+      "cost_usd": 0.0389,
+      "duration_s": 11.3,
+      "error": null
+    },
+    {
+      "id": "longest_run",
+      "question": "What was my longest run before the half marathon?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer gives 21.3 km, names both tied runs (23 Aug and 30 Aug), and does not give the half marathon as the answer."
+      },
+      "answer": "Your longest run before the Riverside Half Marathon (27 Sep 2026) was **21.3 km**. You ran that distance twice:\n\n- **23 Aug, Canal Path:** 21.3 km in 2:04, at 5:50/km.\n- **30 Aug, Riverside:** 21.3 km in 2:02, at 5:44/km.\n\nThe two are tied on distance. If you count the 30 Aug run as the longest, it's the later and faster of the two. The next longest was 20.3 km on 6 Sep.",
+      "tool_calls": [
+        {
+          "name": "query",
+          "input": {
+            "sql": "SELECT activity_id, activity_name, activity_date, distance_km, duration_min FROM activities WHERE activity_type='running' AND (distance_km BETWEEN 20.5 AND 22.5 OR lower(activity_name) LIKE '%half%') ORDER BY activity_date"
+          },
+          "is_error": true,
+          "result_chars": 418
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "SELECT activity_id, activity_name, activity_date, distance_m/1000 AS km, duration_s/60 AS min FROM activities WHERE activity_type='running' AND (distance_m BETWEEN 20500 AND 22500 OR lower(activity_name) LIKE '%half%') ORDER BY activity_date"
+          },
+          "is_error": false,
+          "result_chars": 699
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "SELECT activity_id, activity_name, activity_date, distance_m/1000 AS km, duration_s/60 AS min, avg_pace_s_per_km FROM activities WHERE activity_type='running' AND activity_date < '2026-09-27' ORDER BY distance_m DESC LIMIT 5"
+          },
+          "is_error": false,
+          "result_chars": 1414
+        }
+      ],
+      "turns": 4,
+      "usage": {
+        "input": 10,
+        "cache_write": 1786,
+        "cache_read": 21940,
+        "output": 715
+      },
+      "grader_usage": {
+        "input": 418,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 61
+      },
+      "cost_usd": 0.0175,
+      "duration_s": 9.0,
+      "error": null
+    },
+    {
+      "id": "runs_in_may",
+      "question": "How many runs did I do in May 2026, and how far did I run in total?",
+      "passed": false,
+      "failed_checks": [
+        "answer lacks /\\b20\\b/",
+        "answer lacks /190\\.6|191|190\\b/"
+      ],
+      "grade": {
+        "passed": false,
+        "reason": "The answer states 17 runs and 173.7 km, which contradicts the expected 20 runs and 190.6 km."
+      },
+      "answer": "You did 17 runs in May 2026, totalling about 173.7 km. That's an average of about 10.2 km per run.\n\nThe data is flagged as synthetic (generated demo data), so these numbers come from demo data and not real recorded runs. The sync is current for May.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "list_activities",
+          "input": {
+            "start": "2026-05-01",
+            "end": "2026-05-31",
+            "activity_type": "running",
+            "limit": 200
+          },
+          "is_error": false,
+          "result_chars": 11505
+        }
+      ],
+      "turns": 2,
+      "usage": {
+        "input": 6,
+        "cache_write": 6008,
+        "cache_read": 10352,
+        "output": 401
+      },
+      "grader_usage": {
+        "input": 306,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 53
+      },
+      "cost_usd": 0.0223,
+      "duration_s": 6.0,
+      "error": null
+    },
+    {
+      "id": "strength_june",
+      "question": "How many strength sessions did I do in June 2026?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer states 7 strength sessions in June 2026, matching the expected answer, and the extra detail (dates, sync note) does not contradict it."
+      },
+      "answer": "You did **7 strength sessions in June 2026**: June 3, 10, 12, 17, 19, 24 and 26.\n\nThe data is synced through late September, so June is fully covered.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "list_activities",
+          "input": {
+            "start": "2026-06-01",
+            "end": "2026-06-30",
+            "activity_type": "strength_training",
+            "limit": 100
+          },
+          "is_error": false,
+          "result_chars": 4673
+        }
+      ],
+      "turns": 2,
+      "usage": {
+        "input": 6,
+        "cache_write": 2740,
+        "cache_read": 10346,
+        "output": 211
+      },
+      "grader_usage": {
+        "input": 244,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 62
+      },
+      "cost_usd": 0.0121,
+      "duration_s": 4.8,
+      "error": null
+    },
+    {
+      "id": "vo2max_trend",
+      "question": "How has my VO2 max changed since April?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer says VO2 max rose from 46 in April to 50 by 27 September, matching the expected answer, and the extra detail does not contradict it."
+      },
+      "answer": "Your VO2 max has gone up from 46 to 50 since April, a gain of about 4 points (roughly 9%).\n\n- **Start:** 46 on 2 April (precise value 46.2).\n- **Now:** 50 on 27 September (precise value 50.0). That is the latest reading in the synced data.\n- **Steps up:** the displayed value rose by 1 point about once a month, to 47 on 28 April, 48 on 7 June, 49 on 4 August and 50 on 3 September.\n- **Flat spells:** it held steady through parts of May, June and July, and the precise value dipped slightly at times. One example is 48.4 on 12 July, then 47.9 on 21 July.\n\nThis is based on 37 readings from April to September. Nothing after 27 September is included, so any change in the last two weeks isn't captured.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select * from vo2max where date >= '2026-04-01' order by 1"
+          },
+          "is_error": false,
+          "result_chars": 3530
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 2360,
+        "cache_read": 15937,
+        "output": 382
+      },
+      "grader_usage": {
+        "input": 467,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 198
+      },
+      "cost_usd": 0.0158,
+      "duration_s": 8.8,
+      "error": null
+    },
+    {
+      "id": "pace_trend",
+      "question": "Has my average running pace improved between April and September 2026? Was it at a similar heart rate?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "April pace (5:47) matches, September pace (5:17 vs ~5:21) is within a few seconds, and average HR (137 to 139 bpm) is close enough to support the 'similar heart rate' conclusion; the race note is optional and missing."
+      },
+      "answer": "Yes, your pace improved a lot, and your heart rate was only slightly higher. I compared all of April with all of September 2026. September's data ends on the 27th, so that month is nearly complete.\n\n- **Pace:** it went from 5:47 /km in April (18 runs) to 5:17 /km in September (17 runs). That is 30 seconds per km faster, or about 8.8%.\n- **Heart rate:** the time-weighted average rose from 137 bpm to 139 bpm, a gain of about 2 bpm (1.5%).\n\nSo you ran noticeably faster at about the same heart rate. Garmin's VO2 max estimate rose from 46.6 to 50.0 over the same period, and your resting HR fell from about 55 to 51 bpm.\n\nTwo caveats. These are monthly averages across all runs, so a different mix of easy runs, long runs and hard runs could shift the numbers. September also had more distance (182 km vs 152 km) and a longer longest run (21.1 km vs 15.2 km). I haven't compared like-for-like runs, such as only easy runs. I can do that if you want.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "compare_periods",
+          "input": {
+            "a_start": "2026-04-01",
+            "a_end": "2026-04-30",
+            "b_start": "2026-09-01",
+            "b_end": "2026-09-30"
+          },
+          "is_error": false,
+          "result_chars": 4593
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 2737,
+        "cache_read": 15969,
+        "output": 532
+      },
+      "grader_usage": {
+        "input": 632,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 403
+      },
+      "cost_usd": 0.0207,
+      "duration_s": 10.0,
+      "error": null
+    },
+    {
+      "id": "training_gap",
+      "question": "Was there a week in July 2026 where I didn't train at all? What did my body data look like that week?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer identifies 13\u201319 July as having no activities, reports resting HR of about 60 vs 51\u201355, HRV of about 34 vs 47\u201356 ms and lower sleep scores, and explicitly declines to diagnose a cause."
+      },
+      "answer": "Yes. **Mon 13 \u2013 Sun 19 July** had no activities at all. No runs and no strength sessions were logged between your 12 July long run and 21 July. There is also no daily record for 20 July, so the break may be 8 days. The only other July gap is 9\u201310 July, when the watch was barely worn (1.6\u20132.4 h/day), so I can't treat that as a clean rest period.\n\nBody data for 13\u201319 July, against the rest of the month:\n\n| Metric | 13\u201319 July | Rest of July |\n|---|---|---|\n| Resting HR | 57\u201363, avg ~60 bpm | mostly 51\u201355 |\n| Avg stress | ~42 (7 days) | ~30 |\n| Body battery high | 65\u201373, avg ~70 | usually 87\u2013100 |\n| Steps | ~7,700/day | ~12,000+ |\n\n- **Sleep:** only 16\u201319 July have sleep data, 4 nights, because the watch has no sleep record for 13\u201315 July. Those nights averaged about 6.1 h with a sleep score of 30\u201349 (avg ~41). The rest of July's sleep scores were mostly 57\u201374. Deep sleep was 0.74\u20131.06 h.\n- **HRV:** overnight HRV was 24\u201337 ms (avg ~34) on those 4 nights, against about 47\u201356 ms on most other nights. The low was 23.8 ms on 17 July.\n- **After the break:** on 21 July, after the break, resting HR was back to 53, HRV was 51 ms, sleep score was 71 and body battery high was 100.\n\nDuring that week your resting HR was elevated, HRV and sleep were poor, and stress was higher. All of this recovered by 21 July. The data doesn't show why you stopped training, so I can't say whether you were ill, stressed or resting on purpose.\n\nThis dataset is flagged as synthetic (demo) data.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "list_activities",
+          "input": {
+            "start": "2026-06-25",
+            "end": "2026-08-05",
+            "limit": 100
+          },
+          "is_error": false,
+          "result_chars": 19536
+        },
+        {
+          "name": "daily_metrics",
+          "input": {
+            "start": "2026-07-01",
+            "end": "2026-07-31",
+            "min_wear_hours": 0
+          },
+          "is_error": false,
+          "result_chars": 14481
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 17026,
+        "cache_read": 15971,
+        "output": 1486
+      },
+      "grader_usage": {
+        "input": 921,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 275
+      },
+      "cost_usd": 0.0652,
+      "duration_s": 18.1,
+      "error": null
+    },
+    {
+      "id": "sleep_june_august",
+      "question": "Did I sleep more in August than in June 2026?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer reports 6.92 h vs 6.87 h, calls the difference negligible, and notes the recorded nights (25 in August, 18 in June) and that data is missing for other nights, matching the expected answer."
+      },
+      "answer": "Not meaningfully. August averaged 6.92 h of sleep a night and June averaged 6.87 h. That is about 3 minutes more in August, which is too small to call a difference.\n\n- **Nights counted:** August has 25 nights with sleep data and June has 18. The other nights are missing, probably because the watch wasn't worn overnight. The averages only cover the nights that were recorded.\n- **Sleep stages:** Deep sleep was 1.21 h in August and 1.18 h in June. REM was 1.51 h and 1.50 h.\n- **Sleep score:** August scored higher, 66 against 62.\n\nThis is synthetic demo data, not real Garmin data.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "compare_periods",
+          "input": {
+            "a_start": "2026-06-01",
+            "a_end": "2026-06-30",
+            "b_start": "2026-08-01",
+            "b_end": "2026-08-31"
+          },
+          "is_error": false,
+          "result_chars": 4582
+        }
+      ],
+      "turns": 2,
+      "usage": {
+        "input": 6,
+        "cache_write": 2769,
+        "cache_read": 10346,
+        "output": 386
+      },
+      "grader_usage": {
+        "input": 477,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 84
+      },
+      "cost_usd": 0.0147,
+      "duration_s": 7.6,
+      "error": null
+    },
+    {
+      "id": "short_sleep_resting_hr",
+      "question": "Is my resting heart rate higher after nights with less than 6 hours of sleep?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer says yes with about a 3 bpm difference (55.7 vs 52.8, within 1 bpm of 55 and 53), gives counts of 15 and 100, and mentions that 15 short nights is a small sample."
+      },
+      "answer": "Yes. In your data, resting heart rate is higher on days that follow nights under 6 hours of sleep.\n\n- **Under 6 h:** average resting HR was 55.7 bpm over 15 nights, with a range of 53\u201360.\n- **6 h or more:** average resting HR was 52.8 bpm over 100 nights, with a range of 49\u201359.\n- **Difference:** about 3 bpm. The spread within each group is about 2 bpm, so the gap is larger than the usual day-to-day variation.\n- **Across all 115 nights:** sleep duration and resting HR have a correlation of about \u22120.42. Longer sleep goes with a lower resting HR.\n\nCaveats:\n- Fifteen short nights is a small sample.\n- This is an association only. Other things, such as hard training days, could affect both sleep and resting HR.\n- I used the resting HR for the same day you woke up, and only counted days with at least 4 hours of watch wear.\n- The data covers only nights through 29 Sep 2026, and the dataset is flagged as synthetic demo data.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "read_mcp_resource",
+          "input": {
+            "uri": "schema://tables"
+          },
+          "is_error": false,
+          "result_chars": 5140
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "SELECT sleep_total_s < 6*3600 AS short_sleep, count(*) n, round(avg(resting_hr_bpm),2) avg_rhr, round(stddev(resting_hr_bpm),2) sd, min(resting_hr_bpm) mn, max(resting_hr_bpm) mx, round(avg(sleep_total_s)/3600.0,2) avg_sleep_h FROM daily WHERE sleep_total_s IS NOT NULL AND resting_hr_bpm IS NOT NULL AND wear_s >= 4*3600 GROUP BY 1;\nSELECT round(corr(sleep_total_s/3600.0, resting_hr_bpm),3) r, count(*) n FROM daily WHERE sleep_total_s IS NOT NULL AND resting_hr_bpm IS NOT NULL AND wear_s >= 4*3600;"
+          },
+          "is_error": true,
+          "result_chars": 59
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "SELECT sleep_total_s < 6*3600 AS short_sleep, count(*) n, round(avg(resting_hr_bpm),2) avg_rhr, round(stddev(resting_hr_bpm),2) sd, min(resting_hr_bpm) mn, max(resting_hr_bpm) mx, round(avg(sleep_total_s)/3600.0,2) avg_sleep_h, round(corr(sleep_total_s/3600.0, resting_hr_bpm),3) r FROM daily WHERE sleep_total_s IS NOT NULL AND resting_hr_bpm IS NOT NULL AND wear_s >= 4*3600 GROUP BY ROLLUP(1)"
+          },
+          "is_error": false,
+          "result_chars": 703
+        }
+      ],
+      "turns": 4,
+      "usage": {
+        "input": 10,
+        "cache_write": 4431,
+        "cache_read": 27697,
+        "output": 1109
+      },
+      "grader_usage": {
+        "input": 606,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 88
+      },
+      "cost_usd": 0.0298,
+      "duration_s": 11.7,
+      "error": null
+    },
+    {
+      "id": "long_run_cadence",
+      "question": "What is my average cadence on runs longer than 15 km?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer states about 155 spm across 16 runs, matching the expected 154.8 over 16 runs; the extra details (date range, duration-weighted figure, 153\u2013166 range) don't contradict it."
+      },
+      "answer": "Your average cadence on runs longer than 15 km is about **155 steps/min**. That's the mean across 16 runs from 2026-04-19 to 2026-09-27. Weighting by duration gives the same figure, about 155 spm. Individual runs ranged from 153 to 166 spm.",
+      "tool_calls": [
+        {
+          "name": "query",
+          "input": {
+            "sql": "select count(*) n, avg(avg_cadence_spm) avg_cad, min(avg_cadence_spm) mn, max(avg_cadence_spm) mx, sum(avg_cadence_spm*duration_min)/sum(duration_min) time_weighted, min(activity_date) first_d, max(activity_date) last_d from activities where activity_type='running' and distance_km>15 and avg_cadence_spm is not null"
+          },
+          "is_error": true,
+          "result_chars": 405
+        },
+        {
+          "name": "query",
+          "input": {
+            "sql": "select count(*) n, avg(avg_cadence_spm) avg_cad, min(avg_cadence_spm) mn, max(avg_cadence_spm) mx, sum(avg_cadence_spm*duration_s)/sum(duration_s) time_weighted, min(activity_date) first_d, max(activity_date) last_d from activities where activity_type='running' and distance_m>15000 and avg_cadence_spm is not null"
+          },
+          "is_error": false,
+          "result_chars": 367
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 723,
+        "cache_read": 15996,
+        "output": 473
+      },
+      "grader_usage": {
+        "input": 296,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 80
+      },
+      "cost_usd": 0.0111,
+      "duration_s": 6.9,
+      "error": null
+    },
+    {
+      "id": "not_synced",
+      "question": "How was my training in the first week of October 2026?",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer says nothing is loaded for 1\u20137 October, invents no October activity, offers to sync again, and treats September data as September, which matches the expected answer."
+      },
+      "answer": "I can't tell you how that week went, because the data doesn't reach it. The last sync was today (2026-10-12), but it only brought in the following:\n\n- **Activities and runs:** up to 2026-09-27\n- **Daily wellness:** up to 2026-09-30, and sleep up to 2026-09-29\n- **VO2 max:** up to 2026-09-27\n\nNothing is loaded for 1\u20137 October. That doesn't show you didn't train. The days are missing from the data.\n\nThe sync ran only minutes ago, so running it again probably won't add anything. The activities may not have uploaded from your watch to Garmin Connect yet. Once they have, I can sync again and review the week.\n\nI can also look at the last week or two of September, which is covered, if that helps.",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "list_activities",
+          "input": {
+            "start": "2026-10-01",
+            "end": "2026-10-07"
+          },
+          "is_error": false,
+          "result_chars": 277
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 749,
+        "cache_read": 15939,
+        "output": 427
+      },
+      "grader_usage": {
+        "input": 491,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 241
+      },
+      "cost_usd": 0.0127,
+      "duration_s": 9.5,
+      "error": null
+    },
+    {
+      "id": "no_unasked_advice",
+      "question": "Summarise my training in August 2026.",
+      "passed": true,
+      "failed_checks": [],
+      "grade": {
+        "passed": true,
+        "reason": "The answer states 21 runs, 230 km and 5 strength sessions, adds paces, long runs and load, and gives no training advice, plans or recommendations."
+      },
+      "answer": "**August 2026 was a bigger month than July. You ran 230 km over 21 runs, up 30% from 177 km over 15 runs.**\n\n**Volume**\n- Weekly mileage averaged 52 km, against 40 km in July.\n- Average pace was 5:32/km at 135 bpm average HR. July was 5:36/km at 136 bpm.\n- Total training load was 1,815, up 21% from 1,504.\n- You did 5 strength sessions, one fewer than July.\n- The 21 runs were 16 road runs, 3 trail runs and 1 treadmill run. The 3 trail runs were on Aug 1, 15 and 29.\n\n**Structure**\n- **Long runs:** 19.6 km on Aug 9, then 21.3 km on both Aug 23 and Aug 30. All were at an easy HR of about 128\u2013131 bpm. The longest run was 21.3 km, up from 19.4 km in July.\n- **Hard sessions:** There were about six, usually 10.5\u201311.5 km at 5:03\u20135:12/km.\n  - Three were the hardest efforts, with max HR around 190 and anaerobic training effect near 5: Aug 4, 18 and 25.\n  - Three were steadier at about 5:05\u20135:08/km and 147\u2013153 bpm average HR: Aug 6, 20 and 27.\n- **Easy runs:** The rest were 5.5\u201312 km at 5:30\u20135:50/km and 126\u2013138 bpm.\n\n**Fitness and recovery** (compared with July)\n- VO\u2082 max ended the month at 49.4, up from 48.2.\n- Resting HR averaged 51.7 bpm, down from 54.6.\n- Overnight HRV averaged 51 ms, up from 46 ms.\n- Sleep averaged 6.9 hours in both months. Sleep score rose from 60 to 66.\n- Average stress was 31, against 33 in July.\n- Daily steps averaged about 14,400, against 12,900.\n\nSleep and HRV were recorded on 25 nights in August and 19 in July, so those comparisons rest on incomplete data. The status check flags this dataset as synthetic (generated demo data).",
+      "tool_calls": [
+        {
+          "name": "data_status",
+          "input": {},
+          "is_error": false,
+          "result_chars": 673
+        },
+        {
+          "name": "compare_periods",
+          "input": {
+            "a_start": "2026-07-01",
+            "a_end": "2026-07-31",
+            "b_start": "2026-08-01",
+            "b_end": "2026-08-31"
+          },
+          "is_error": false,
+          "result_chars": 4589
+        },
+        {
+          "name": "list_activities",
+          "input": {
+            "start": "2026-08-01",
+            "end": "2026-08-31",
+            "limit": 100
+          },
+          "is_error": false,
+          "result_chars": 17543
+        }
+      ],
+      "turns": 3,
+      "usage": {
+        "input": 8,
+        "cache_write": 10993,
+        "cache_read": 15935,
+        "output": 1265
+      },
+      "grader_usage": {
+        "input": 951,
+        "cache_write": 0,
+        "cache_read": 0,
+        "output": 66
+      },
+      "cost_usd": 0.0459,
+      "duration_s": 14.5,
+      "error": null
+    }
+  ]
+}

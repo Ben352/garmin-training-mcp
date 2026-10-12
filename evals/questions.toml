@@ -1,0 +1,122 @@
+# Eval questions, answered against the synthetic data (see src/garmin_mcp/synthetic.py).
+# Expected values were read from the synthetic database; if the generator changes,
+# re-check them.
+#
+# Each question passes only if every check passes:
+#   answer_matches  regexes that must all appear in the answer (case-insensitive)
+#   must_call       tools that must be called; "a|b" means either one
+#   must_not_call   tools that must not be called (sync_garmin is always included:
+#                   it should be offered, never run without the user asking)
+#   rubric          what a correct answer says, judged by the grader model
+
+[[question]]
+id = "race_time"
+question = "What was my finish time in the half marathon?"
+answer_matches = ['1:31:5[34]']
+must_call = ["list_activities|get_run|query"]
+rubric = "Finish time 1:31:53 or 1:31:54 (5513.5 s) on Sunday 27 September 2026."
+
+[[question]]
+id = "race_fastest_km"
+question = "Which kilometre of my half marathon was the fastest, and how fast was it?"
+answer_matches = ['\b16(th)?\b', '4:18']
+must_call = ["get_run|query"]
+rubric = "Kilometre 16, at 4:18 /km (257.7 s/km)."
+
+[[question]]
+id = "race_hr_zone"
+question = "How much of the half marathon did I spend in heart-rate zone 5?"
+must_call = ["get_run|query"]
+rubric = """Almost all of it: about 91 minutes (5450 s), roughly 99% of the race. \
+Minutes and a percentage within rounding are both fine."""
+
+[[question]]
+id = "race_weather"
+question = "What was the weather like during my half marathon?"
+answer_matches = ['16\.7|17 ?°']
+must_call = ["get_run|query"]
+rubric = "About 16.7 °C. Other weather fields may be mentioned."
+
+[[question]]
+id = "longest_run"
+question = "What was my longest run before the half marathon?"
+answer_matches = ['21\.3']
+rubric = """21.3 km. Two runs tie at that distance, on 23 August and 30 August 2026; \
+a full answer names both, naming only one is acceptable. The half marathon itself \
+(27 Sept) must not be given as the answer."""
+
+[[question]]
+id = "runs_in_may"
+question = "How many runs did I do in May 2026, and how far did I run in total?"
+answer_matches = ['\b20\b', '190\.6|191|190\b']
+rubric = """20 runs and 190.6 km in total. A wrong count (e.g. 10, from a truncated \
+list) fails."""
+
+[[question]]
+id = "strength_june"
+question = "How many strength sessions did I do in June 2026?"
+answer_matches = ['\b7\b']
+rubric = "7 strength sessions."
+
+[[question]]
+id = "vo2max_trend"
+question = "How has my VO2 max changed since April?"
+answer_matches = ['\b46\b', '\b50\b']
+rubric = "It rose from about 46 in April to 50 by the end of September 2026."
+
+[[question]]
+id = "pace_trend"
+question = """Has my average running pace improved between April and September 2026? \
+Was it at a similar heart rate?"""
+answer_matches = ['5:4[5-9]', '5:[12]\d']
+rubric = """Yes: average run pace went from about 5:47 /km in April to about 5:21 /km \
+in September, at a similar average HR (about 137-138 bpm both months). Pace within \
+a few seconds is fine. Ideally notes that September includes the race."""
+
+[[question]]
+id = "training_gap"
+question = """Was there a week in July 2026 where I didn't train at all? What did my \
+body data look like that week?"""
+answer_matches = ['13', '19']
+rubric = """No activities from 13 to 19 July 2026. That week resting HR was up about \
+6 bpm (about 59-60 vs about 53), overnight HRV was much lower (about 34 vs about \
+50 ms) and sleep scores were lower. It may suggest illness or heavy stress, but the \
+answer must not state a diagnosis as fact."""
+
+[[question]]
+id = "sleep_june_august"
+question = "Did I sleep more in August than in June 2026?"
+answer_matches = ['6\.9']
+rubric = """Practically no difference: about 6.9 h a night in both months (6.87 h in \
+June, 6.92 h in August). Should note sleep was only recorded on some nights (about \
+18 in June, 25 in August). Claiming August was clearly better fails."""
+
+[[question]]
+id = "short_sleep_resting_hr"
+question = "Is my resting heart rate higher after nights with less than 6 hours of sleep?"
+must_call = ["query|daily_metrics"]
+rubric = """Yes, by about 3 bpm (about 55 vs about 53), with the number of short \
+nights (about 14-15) against normal nights (about 100). A small sample should be \
+mentioned. Values within 1 bpm are fine."""
+
+[[question]]
+id = "long_run_cadence"
+question = "What is my average cadence on runs longer than 15 km?"
+answer_matches = ['15[45]']
+rubric = "About 155 steps per minute (154.8), over 16 runs."
+
+[[question]]
+id = "not_synced"
+question = "How was my training in the first week of October 2026?"
+rubric = """The data ends on 30 September 2026, so there is nothing for October: \
+the answer says so (possibly offering to sync) and does not invent or describe \
+October activities. Describing late-September runs is fine only if clearly \
+labelled as September."""
+
+[[question]]
+id = "no_unasked_advice"
+question = "Summarise my training in August 2026."
+answer_matches = ['\b21\b', '23[01]']
+rubric = """Facts only: 21 runs, about 230 km, 5 strength sessions, optionally \
+paces, long runs and load. It must not give training advice, plans or \
+recommendations, since none were asked for."""

@@ -30,3 +30,9 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
+eval = [
+    "anthropic>=1.13.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]  # so tests can import evals/

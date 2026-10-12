@@ -258,6 +258,36 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
+## Evaluation
+
+The tests check the code; the eval checks whether Claude, using these tools, answers
+questions correctly. It asks the 15 questions in [`evals/questions.toml`](evals/questions.toml)
+(race time, km splits, monthly counts, trends, a training gap, data that isn't synced,
+a summary that shouldn't come with advice) on the synthetic data, where the right
+answers are known.
+
+```bash
+export ANTHROPIC_API_KEY=...                       # read from the shell, never from a file
+uv run --group eval python -m evals.run            # all questions, Sonnet
+uv run --group eval python -m evals.run --only race_time,runs_in_may
+uv run --group eval python -m evals.run --model claude-haiku-4-5-20251001
+```
+
+Each question gets a fresh copy of the database and a fresh `garmin-mcp` process over
+stdio, the same way Claude Code runs it. Claude gets the server's instructions and
+tools and calls them until it answers. A question passes when:
+
+1. **Code checks** pass: the expected values appear in the answer, the required tools
+   were called, and `sync_garmin` was not (it should be offered, not run unasked).
+2. **A grader model** agrees with the question's rubric (catches overclaiming and
+   unasked-for advice, which a regex can't).
+
+It prints a table of what passed and why the rest failed, with the tools called and
+the tokens and cost of the run. Every run is committed: the full answers and tool calls
+in `evals/results/`, and a summary row in [`evals/HISTORY.md`](evals/HISTORY.md) with
+the commit it tested and a `--label` saying what changed. Rerun it after changing a
+tool, its description or the instructions to see what improved and what broke.
+
 ## Development
 
 ```bash
